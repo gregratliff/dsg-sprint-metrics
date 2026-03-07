@@ -1,7 +1,7 @@
 """GitHub API client for fetching pull requests."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from github import GithubException
@@ -27,6 +27,12 @@ class GitHubClient:
                 f"Failed to access repository '{repo}': {exc.data.get('message', exc)}. "
                 f"Check that the repo exists and your PAT has access."
             ) from exc
+        # Ensure dates are timezone-aware for comparison with GitHub's UTC datetimes
+        if start_date.tzinfo is None:
+            start_date = start_date.replace(tzinfo=timezone.utc)
+        if end_date.tzinfo is None:
+            end_date = end_date.replace(tzinfo=timezone.utc)
+
         raw_prs = gh_repo.get_pulls(state="all", sort="created", direction="desc")
 
         results = []
