@@ -139,6 +139,9 @@ def run(
 
     # Filter to configured team members only
     team_identities = {m.ado_identity for m in cfg.team_members}
+    unique_assignees = sorted({wi.assigned_to for wi in work_items})
+    print(f"  ADO assigned_to values: {unique_assignees}")
+    print(f"  Config ado_identity values: {sorted(team_identities)}")
     before = len(work_items)
     work_items = filter_work_items_to_team(work_items, team_identities)
     excluded = before - len(work_items)
