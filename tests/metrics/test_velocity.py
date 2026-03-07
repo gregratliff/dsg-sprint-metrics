@@ -200,8 +200,8 @@ class TestCalculateVelocity:
         # Invariant: planned == delivered + carryover + scope_removed(non-carryover)
         # Here: 8 = 5 + 3 + 0 ✓
 
-    def test_carried_over_tracks_scope_removed(self):
-        """CARRIED_OVER points should count toward scope_removed_points."""
+    def test_scope_removed_excludes_carried_over(self):
+        """scope_removed_points only counts REMOVED, not CARRIED_OVER."""
         items = [
             make_work_item(id_=1, story_points=5.0, state="Closed",
                            scope_status=ScopeStatus.COMMITTED),
@@ -212,8 +212,9 @@ class TestCalculateVelocity:
         ]
         result = calculate_velocity(items)
 
-        # scope_removed = 3 (carried_over) + 2 (removed) = 5
-        assert result["team"]["scope_removed_points"] == 5.0
+        # scope_removed = only REMOVED = 2 (CARRIED_OVER is in carryover_points)
+        assert result["team"]["scope_removed_points"] == 2.0
+        assert result["team"]["carryover_points"] == 3.0  # only carried_over (REMOVED not in carryover)
 
     def test_individual_scope_stats(self):
         """Individual members should have all scope-related stats."""
@@ -253,7 +254,55 @@ class TestCalculateVelocity:
         assert john["delivered_points"] == 8.0  # only committed closed
         assert john["delivery_rate"] == pytest.approx(8.0 / 14.0)
         assert john["scope_added_points"] == 0.0
-        assert john["scope_removed_points"] == 6.0  # 4 carried + 2 removed
+        assert john["scope_removed_points"] == 2.0  # only REMOVED (not carried_over)
         assert john["carryover_points"] == 4.0  # carried_over always counts
         assert john["carryover_rate"] == pytest.approx(4.0 / 14.0)
         assert john["commitment_reliability"] == pytest.approx(8.0 / 14.0)
+
+    def test_planned_invariant(self):
+        """planned == delivered + carryover + removed for all scope statuses.
+
+        Note: delivered_points includes ADDED_MID_SPRINT items which are NOT
+        planned, so the invariant accounts for scope_added.
+        """
+        items = [
+            # Committed closed → delivered
+            make_work_item(id_=1, story_points=5.0, state="Closed",
+                           scope_status=ScopeStatus.COMMITTED),
+            # Committed active → carryover
+            make_work_item(id_=2, story_points=3.0, state="Active",
+                           scope_status=ScopeStatus.COMMITTED),
+            # Added closed → delivered (not planned, so outside invariant)
+            make_work_item(id_=3, story_points=2.0, state="Closed",
+                           scope_status=ScopeStatus.ADDED_MID_SPRINT),
+            # Carried over → carryover
+            make_work_item(id_=4, story_points=4.0, state="Active",
+                           scope_status=ScopeStatus.CARRIED_OVER),
+            # Carried over but closed in next sprint → still carryover
+            make_work_item(id_=5, story_points=6.0, state="Closed",
+                           scope_status=ScopeStatus.CARRIED_OVER),
+            # Removed → removed
+            make_work_item(id_=6, story_points=1.0, state="Active",
+                           scope_status=ScopeStatus.REMOVED),
+        ]
+        result = calculate_velocity(items)
+        t = result["team"]
+
+        # planned = 5 + 3 + 4 + 6 + 1 = 19 (committed + carried_over + removed)
+        assert t["planned_points"] == 19.0
+        # delivered = 5 + 2 = 7 (closed committed + closed added)
+        assert t["delivered_points"] == 7.0
+        # carryover = 3 + 4 + 6 = 13 (non-closed committed + all carried_over)
+        assert t["carryover_points"] == 13.0
+        # removed = 1 (only REMOVED)
+        assert t["scope_removed_points"] == 1.0
+        # added = 2 (scope creep)
+        assert t["scope_added_points"] == 2.0
+
+        # THE INVARIANT: planned = (delivered - added) + carryover + removed
+        # delivered includes ADDED items which aren't planned, so subtract them
+        assert t["planned_points"] == pytest.approx(
+            (t["delivered_points"] - t["scope_added_points"])
+            + t["carryover_points"]
+            + t["scope_removed_points"]
+        )

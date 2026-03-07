@@ -41,7 +41,7 @@ Metric modules are stateless — no classes, no side effects. They receive lists
 - Rework label matching is case-insensitive
 - Category "other" is suppressed from output if its count is 0
 - Cycle time excludes REMOVED and CARRIED_OVER items — they left the sprint, so their completion time belongs to wherever they landed
-- CARRIED_OVER items always count as carryover even if closed (in the next sprint), since they weren't delivered in the measured sprint. This ensures the invariant: planned = delivered + carryover + removed(non-carryover)
+- CARRIED_OVER items always count as carryover even if closed (in the next sprint), since they weren't delivered in the measured sprint
 
 ## Scope-Aware Velocity
 
@@ -57,9 +57,12 @@ All velocity stats are computed at both team and individual level using shared a
 - **planned_points** = COMMITTED + REMOVED + CARRIED_OVER (what was in the planning snapshot)
 - **delivered_points** = closed items that are COMMITTED or ADDED_MID_SPRINT
 - **scope_added_points** = ADDED_MID_SPRINT points
-- **scope_removed_points** = REMOVED + CARRIED_OVER points (all items that left the sprint)
+- **scope_removed_points** = REMOVED points only (items descoped to backlog/deleted — not carried over)
 - **carryover_points** = non-closed COMMITTED/ADDED items + **all** CARRIED_OVER items (regardless of closed state — they weren't delivered in *this* sprint)
 - **commitment_reliability** = closed COMMITTED items / planned_points
+
+### Invariant
+`planned = (delivered - scope_added) + carryover + scope_removed`. The three right-hand buckets are mutually exclusive partitions of planned points: items either got delivered in this sprint, carried over (including to another sprint), or removed entirely.
 
 ### Carryover detection
 

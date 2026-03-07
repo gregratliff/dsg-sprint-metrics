@@ -13,8 +13,6 @@ _PLANNED_STATUSES = {ScopeStatus.COMMITTED, ScopeStatus.REMOVED, ScopeStatus.CAR
 _DELIVERABLE_STATUSES = {ScopeStatus.COMMITTED, ScopeStatus.ADDED_MID_SPRINT}
 # Scope statuses that can carry over (not completed within the sprint)
 _CARRYOVER_STATUSES = {ScopeStatus.COMMITTED, ScopeStatus.ADDED_MID_SPRINT, ScopeStatus.CARRIED_OVER}
-# Scope statuses that count as "removed from sprint" (descoped or carried over)
-_SCOPE_REMOVED_STATUSES = {ScopeStatus.REMOVED, ScopeStatus.CARRIED_OVER}
 
 
 def _empty_accum() -> dict[str, float]:
@@ -55,7 +53,7 @@ def _accumulate(acc: dict[str, float], wi: WorkItem, pts: float) -> None:
 
     if wi.scope_status == ScopeStatus.ADDED_MID_SPRINT:
         acc["scope_added_points"] += pts
-    elif wi.scope_status in _SCOPE_REMOVED_STATUSES:
+    elif wi.scope_status == ScopeStatus.REMOVED:
         acc["scope_removed_points"] += pts
 
     if wi.scope_status == ScopeStatus.CARRIED_OVER:
