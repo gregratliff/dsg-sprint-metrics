@@ -26,6 +26,7 @@ class GitHubConfig:
     org: str
     repos: list[str]
     pat_env_var: str
+    pr_exclude_patterns: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -93,6 +94,7 @@ def load_config(path: str) -> Config:
         org=_require(gh_raw, "org", "github"),
         repos=_require(gh_raw, "repos", "github"),
         pat_env_var=_require(gh_raw, "pat_env_var", "github"),
+        pr_exclude_patterns=gh_raw.get("pr_exclude_patterns", []),
     )
 
     # Sprint

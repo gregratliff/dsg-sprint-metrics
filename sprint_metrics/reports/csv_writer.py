@@ -15,9 +15,13 @@ def write_sprint_report(metrics: dict, output_path: str) -> None:
     # Determine category columns from team data (exclude "other" if empty)
     cat_names = [c for c in categories["team"] if c != "other" or categories["team"]["other"]["count"] > 0]
 
+    member_info = metrics.get("member_info", {})
+
     fieldnames = [
         "sprint",
         "member",
+        "ado_identity",
+        "github_username",
         "planned_points",
         "delivered_points",
         "delivery_rate",
@@ -47,15 +51,18 @@ def write_sprint_report(metrics: dict, output_path: str) -> None:
 
     # Team row
     rows.append(_build_row(
-        sprint_name, "TEAM",
+        sprint_name, "TEAM", "", "",
         velocity["team"], cycle_time["team"], pr_cycle_time["team"],
         rework["team"], categories["team"], cat_names,
     ))
 
     # Individual rows
     for member in sorted(members):
+        info = member_info.get(member, {})
         rows.append(_build_row(
             sprint_name, member,
+            info.get("ado_identity", ""),
+            info.get("github_username", ""),
             velocity["individual"].get(member, {}),
             cycle_time["individual"].get(member, {}),
             pr_cycle_time["individual"].get(member, {}),
@@ -73,6 +80,8 @@ def write_sprint_report(metrics: dict, output_path: str) -> None:
 def _build_row(
     sprint: str,
     member: str,
+    ado_identity: str,
+    github_username: str,
     vel: dict,
     ct: dict,
     pr_ct: dict,
@@ -83,6 +92,8 @@ def _build_row(
     row = {
         "sprint": sprint,
         "member": member,
+        "ado_identity": ado_identity,
+        "github_username": github_username,
         "planned_points": vel.get("planned_points", ""),
         "delivered_points": vel.get("delivered_points", ""),
         "delivery_rate": vel.get("delivery_rate", ""),

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 
 from sprint_metrics.config import load_config, Config
@@ -13,7 +14,65 @@ from sprint_metrics.metrics.cycle_time import calculate_cycle_times
 from sprint_metrics.metrics.pr_cycle_time import calculate_pr_cycle_times
 from sprint_metrics.metrics.rework import calculate_rework
 from sprint_metrics.metrics.category_breakdown import calculate_category_breakdown
+from sprint_metrics.models import PullRequest, WorkItem
 from sprint_metrics.reports.csv_writer import write_sprint_report
+
+
+def normalize_metrics_identity(
+    metrics: dict, team_members: list,
+) -> dict:
+    """Remap metric dict keys from ADO/GitHub identities to display names.
+
+    ADO-keyed metrics (velocity, cycle_time, rework, categories) use ado_identity.
+    GitHub-keyed metrics (pr_cycle_time) use github_username.
+    This function normalises both to TeamMember.name and attaches member_info.
+    """
+    ado_to_name = {m.ado_identity: m.name for m in team_members}
+    gh_to_name = {m.github_username: m.name for m in team_members}
+
+    ado_keyed = ["velocity", "cycle_time", "rework", "categories"]
+    gh_keyed = ["pr_cycle_time"]
+
+    result = dict(metrics)
+
+    for key in ado_keyed:
+        if key in result and "individual" in result[key]:
+            old = result[key]["individual"]
+            result[key] = dict(result[key])
+            result[key]["individual"] = {
+                ado_to_name[k]: v for k, v in old.items() if k in ado_to_name
+            }
+
+    for key in gh_keyed:
+        if key in result and "individual" in result[key]:
+            old = result[key]["individual"]
+            result[key] = dict(result[key])
+            result[key]["individual"] = {
+                gh_to_name[k]: v for k, v in old.items() if k in gh_to_name
+            }
+
+    # Build member_info lookup
+    result["member_info"] = {
+        m.name: {"ado_identity": m.ado_identity, "github_username": m.github_username}
+        for m in team_members
+    }
+
+    return result
+
+
+def filter_work_items_to_team(
+    work_items: list[WorkItem], team_identities: set[str],
+) -> list[WorkItem]:
+    """Keep only work items assigned to configured team members."""
+    return [wi for wi in work_items if wi.assigned_to in team_identities]
+
+
+def filter_excluded_prs(prs: list[PullRequest], patterns: list[str]) -> list[PullRequest]:
+    """Remove PRs whose title matches any of the exclude patterns."""
+    if not patterns:
+        return prs
+    compiled = [re.compile(p, re.IGNORECASE) for p in patterns]
+    return [pr for pr in prs if not any(rx.search(pr.title) for rx in compiled)]
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -78,6 +137,14 @@ def run(
     work_items = ado_client.get_sprint_work_items(iteration_path)
     print(f"Found {len(work_items)} work items")
 
+    # Filter to configured team members only
+    team_identities = {m.ado_identity for m in cfg.team_members}
+    before = len(work_items)
+    work_items = filter_work_items_to_team(work_items, team_identities)
+    excluded = before - len(work_items)
+    if excluded:
+        print(f"Filtered out {excluded} work items not assigned to team members")
+
     all_prs = []
     team_usernames = [m.github_username for m in cfg.team_members]
     for repo_name in cfg.github.repos:
@@ -93,6 +160,14 @@ def run(
 
     print(f"Total: {len(all_prs)} PRs across {len(cfg.github.repos)} repos")
 
+    # Filter deployment / excluded PRs
+    if cfg.github.pr_exclude_patterns:
+        before = len(all_prs)
+        all_prs = filter_excluded_prs(all_prs, cfg.github.pr_exclude_patterns)
+        excluded = before - len(all_prs)
+        if excluded:
+            print(f"Excluded {excluded} PRs matching exclude patterns")
+
     # Calculate metrics
     metrics = {
         "sprint_name": cfg.sprint.name,
@@ -102,6 +177,9 @@ def run(
         "rework": calculate_rework(work_items, cfg.azure_devops.rework_labels),
         "categories": calculate_category_breakdown(work_items, cfg.categories),
     }
+
+    # Normalize identities to display names
+    metrics = normalize_metrics_identity(metrics, cfg.team_members)
 
     # Write report
     safe_name = cfg.sprint.name.replace("\\", "_").replace("/", "_").replace(" ", "_")

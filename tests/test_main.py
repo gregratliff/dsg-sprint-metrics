@@ -6,7 +6,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from sprint_metrics.main import run, parse_args
+from sprint_metrics.main import (
+    run, parse_args, filter_excluded_prs, filter_work_items_to_team,
+    normalize_metrics_identity,
+)
 from sprint_metrics.models import WorkItem, PullRequest
 
 
@@ -71,6 +74,143 @@ def _sample_prs():
             repo="myorg/repo1", commit_messages=["AB#1 feature A"],
         ),
     ]
+
+
+class TestFilterExcludedPrs:
+    def test_excludes_matching_titles(self):
+        patterns = ["^(production|pentest|master) deploy", "^develop -> master"]
+        prs = [
+            PullRequest(id=1, number=1, title="production deploy 2026-02-26",
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        merged_at=None, closed_at=None, repo="r"),
+            PullRequest(id=2, number=2, title="develop -> master 2026-02-26",
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        merged_at=None, closed_at=None, repo="r"),
+            PullRequest(id=3, number=3, title="1422900 RouteDetails: Stop Status Code Badge",
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        merged_at=None, closed_at=None, repo="r"),
+        ]
+        result = filter_excluded_prs(prs, patterns)
+        assert len(result) == 1
+        assert result[0].id == 3
+
+    def test_empty_patterns_keeps_all(self):
+        prs = [
+            PullRequest(id=1, number=1, title="production deploy",
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        merged_at=None, closed_at=None, repo="r"),
+        ]
+        result = filter_excluded_prs(prs, [])
+        assert len(result) == 1
+
+    def test_case_insensitive_matching(self):
+        patterns = ["^production deploy"]
+        prs = [
+            PullRequest(id=1, number=1, title="Production Deploy 2026-02-26",
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        merged_at=None, closed_at=None, repo="r"),
+        ]
+        result = filter_excluded_prs(prs, patterns)
+        assert len(result) == 0
+
+
+class TestNormalizeMetricsIdentity:
+    def _make_config_members(self):
+        from sprint_metrics.config import TeamMember
+        return [
+            TeamMember(name="Jane Smith", github_username="janesmith",
+                       ado_identity="jane.smith@company.com"),
+            TeamMember(name="John Doe", github_username="johndoe",
+                       ado_identity="john.doe@company.com"),
+        ]
+
+    def test_remaps_ado_and_github_keys_to_display_name(self):
+        members = self._make_config_members()
+        metrics = {
+            "sprint_name": "Sprint 10",
+            "velocity": {
+                "team": {"planned_points": 8},
+                "individual": {
+                    "jane.smith@company.com": {"planned_points": 5},
+                    "john.doe@company.com": {"planned_points": 3},
+                },
+            },
+            "pr_cycle_time": {
+                "team": {"average_hours": 24},
+                "individual": {
+                    "janesmith": {"average_hours": 20},
+                    "johndoe": {"average_hours": 28},
+                },
+            },
+            "cycle_time": {"team": {}, "individual": {}},
+            "rework": {"team": {}, "individual": {}},
+            "categories": {"team": {}, "individual": {}},
+        }
+        result = normalize_metrics_identity(metrics, members)
+
+        # velocity individual keys should now be display names
+        assert "Jane Smith" in result["velocity"]["individual"]
+        assert "jane.smith@company.com" not in result["velocity"]["individual"]
+
+        # pr_cycle_time individual keys should now be display names
+        assert "Jane Smith" in result["pr_cycle_time"]["individual"]
+        assert "janesmith" not in result["pr_cycle_time"]["individual"]
+
+        # member_info should map display name -> identity details
+        assert result["member_info"]["Jane Smith"]["ado_identity"] == "jane.smith@company.com"
+        assert result["member_info"]["Jane Smith"]["github_username"] == "janesmith"
+
+    def test_merges_ado_and_github_data_under_same_key(self):
+        members = self._make_config_members()
+        metrics = {
+            "sprint_name": "Sprint 10",
+            "velocity": {
+                "team": {},
+                "individual": {"jane.smith@company.com": {"planned_points": 5}},
+            },
+            "pr_cycle_time": {
+                "team": {},
+                "individual": {"janesmith": {"average_hours": 20}},
+            },
+            "cycle_time": {"team": {}, "individual": {}},
+            "rework": {"team": {}, "individual": {}},
+            "categories": {"team": {}, "individual": {}},
+        }
+        result = normalize_metrics_identity(metrics, members)
+
+        # Both velocity AND pr_cycle_time should have Jane Smith
+        assert "Jane Smith" in result["velocity"]["individual"]
+        assert "Jane Smith" in result["pr_cycle_time"]["individual"]
+
+
+class TestFilterWorkItemsToTeam:
+    def test_excludes_non_team_members(self):
+        team_identities = {"jane.smith@company.com"}
+        items = [
+            WorkItem(id=1, title="A", assigned_to="jane.smith@company.com",
+                     story_points=5.0, state="Closed", category="strategic",
+                     labels=[], iteration_path="p\\Sprint 10",
+                     activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                     closed_date=datetime(2026, 3, 3, tzinfo=timezone.utc)),
+            WorkItem(id=2, title="B", assigned_to="other.person@company.com",
+                     story_points=3.0, state="Closed", category="defects",
+                     labels=[], iteration_path="p\\Sprint 10",
+                     activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                     closed_date=datetime(2026, 3, 3, tzinfo=timezone.utc)),
+        ]
+        result = filter_work_items_to_team(items, team_identities)
+        assert len(result) == 1
+        assert result[0].assigned_to == "jane.smith@company.com"
+
+    def test_empty_team_returns_empty(self):
+        items = [
+            WorkItem(id=1, title="A", assigned_to="anyone@company.com",
+                     story_points=5.0, state="Closed", category="strategic",
+                     labels=[], iteration_path="p\\Sprint 10",
+                     activated_date=None, closed_date=None),
+        ]
+        result = filter_work_items_to_team(items, set())
+        assert len(result) == 0
 
 
 class TestParseArgs:
@@ -156,6 +296,118 @@ class TestRun:
 
         report_path = output_dir / "26_Q1_2026_Sprint_26.2.2_report.csv"
         assert report_path.exists()
+
+    def test_combined_identity_single_row_per_member(self, tmp_path):
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(VALID_YAML)
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        mock_ado = MagicMock()
+        mock_ado.get_sprint_work_items.return_value = _sample_work_items()
+        mock_gh = MagicMock()
+        mock_gh.get_pull_requests.return_value = _sample_prs()
+
+        with patch("sprint_metrics.main._create_ado_client", return_value=mock_ado), \
+             patch("sprint_metrics.main._create_github_client", return_value=mock_gh), \
+             patch.dict(os.environ, {"ADO_PAT": "fake", "GITHUB_PAT": "fake"}):
+            run(config_path=str(cfg_file), output_dir=str(output_dir))
+
+        report_path = output_dir / "Sprint_10_report.csv"
+        with open(report_path) as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+
+        # Should have TEAM row + 1 member row (not separate ADO + GitHub rows)
+        non_team_rows = [r for r in rows if r["member"] != "TEAM"]
+        assert len(non_team_rows) == 1
+        jane_row = non_team_rows[0]
+        assert jane_row["member"] == "Jane Smith"
+        assert jane_row["ado_identity"] == "jane.smith@company.com"
+        assert jane_row["github_username"] == "janesmith"
+        # Should have both ADO metrics and PR metrics
+        assert float(jane_row["planned_points"]) == 8.0
+        assert int(jane_row["pr_count"]) == 1
+
+    def test_non_team_work_items_excluded_from_report(self, tmp_path):
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(VALID_YAML)
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        other_team_item = WorkItem(
+            id=99, title="Other Team Task",
+            assigned_to="other.person@company.com",
+            story_points=10.0, state="Closed", category="strategic",
+            labels=[], iteration_path="myproject\\Sprint 10",
+            activated_date=datetime(2026, 3, 2, tzinfo=timezone.utc),
+            closed_date=datetime(2026, 3, 5, tzinfo=timezone.utc),
+        )
+        items = _sample_work_items() + [other_team_item]
+
+        mock_ado = MagicMock()
+        mock_ado.get_sprint_work_items.return_value = items
+        mock_gh = MagicMock()
+        mock_gh.get_pull_requests.return_value = _sample_prs()
+
+        with patch("sprint_metrics.main._create_ado_client", return_value=mock_ado), \
+             patch("sprint_metrics.main._create_github_client", return_value=mock_gh), \
+             patch.dict(os.environ, {"ADO_PAT": "fake", "GITHUB_PAT": "fake"}):
+            run(config_path=str(cfg_file), output_dir=str(output_dir))
+
+        report_path = output_dir / "Sprint_10_report.csv"
+        with open(report_path) as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+
+        members = [r["member"] for r in rows]
+        # other.person should NOT appear
+        assert "other.person@company.com" not in members
+        # team total should be 8 points (not 18)
+        team_row = [r for r in rows if r["member"] == "TEAM"][0]
+        assert float(team_row["planned_points"]) == 8.0
+
+    def test_deployment_prs_excluded_from_report(self, tmp_path):
+        yaml_with_patterns = VALID_YAML.replace(
+            '  pat_env_var: "GITHUB_PAT"',
+            '  pat_env_var: "GITHUB_PAT"\n'
+            '  pr_exclude_patterns:\n'
+            '    - "^(production|pentest|master) deploy"\n'
+            '    - "^develop -> master"',
+        )
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(yaml_with_patterns)
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        deploy_pr = PullRequest(
+            id=200, number=2, title="production deploy 2026-02-26-1956",
+            author="janesmith",
+            created_at=datetime(2026, 3, 10, 10, 0, 0, tzinfo=timezone.utc),
+            merged_at=datetime(2026, 3, 10, 10, 5, 0, tzinfo=timezone.utc),
+            closed_at=datetime(2026, 3, 10, 10, 5, 0, tzinfo=timezone.utc),
+            repo="myorg/repo1", commit_messages=[],
+        )
+        prs_with_deploy = _sample_prs() + [deploy_pr]
+
+        mock_ado = MagicMock()
+        mock_ado.get_sprint_work_items.return_value = _sample_work_items()
+        mock_gh = MagicMock()
+        mock_gh.get_pull_requests.return_value = prs_with_deploy
+
+        with patch("sprint_metrics.main._create_ado_client", return_value=mock_ado), \
+             patch("sprint_metrics.main._create_github_client", return_value=mock_gh), \
+             patch.dict(os.environ, {"ADO_PAT": "fake", "GITHUB_PAT": "fake"}):
+            run(config_path=str(cfg_file), output_dir=str(output_dir))
+
+        report_path = output_dir / "Sprint_10_report.csv"
+        with open(report_path) as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+
+        team_row = [r for r in rows if r["member"] == "TEAM"][0]
+        # Only 1 PR should be counted (deploy PR excluded)
+        assert int(team_row["pr_count"]) == 1
 
     def test_missing_pat_env_var_raises(self, tmp_path):
         cfg_file = tmp_path / "config.yaml"

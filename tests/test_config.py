@@ -141,3 +141,27 @@ class TestLoadConfig:
 
         assert cfg.get_member_by_ado("jane.smith@company.com").name == "Jane Smith"
         assert cfg.get_member_by_ado("unknown@x.com") is None
+
+    def test_pr_exclude_patterns_parsed(self, tmp_path):
+        yaml_with_patterns = VALID_YAML.replace(
+            '  pat_env_var: "GITHUB_PAT"',
+            '  pat_env_var: "GITHUB_PAT"\n'
+            '  pr_exclude_patterns:\n'
+            '    - "^(production|pentest|master) deploy"\n'
+            '    - "^develop -> master"',
+        )
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(yaml_with_patterns)
+        cfg = load_config(str(cfg_file))
+
+        assert cfg.github.pr_exclude_patterns == [
+            "^(production|pentest|master) deploy",
+            "^develop -> master",
+        ]
+
+    def test_pr_exclude_patterns_defaults_empty(self, tmp_path):
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(VALID_YAML)
+        cfg = load_config(str(cfg_file))
+
+        assert cfg.github.pr_exclude_patterns == []
