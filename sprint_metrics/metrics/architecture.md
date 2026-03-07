@@ -52,7 +52,7 @@ Work items carry a `scope_status` set by `classify_sprint_scope()` in `main.py`.
 - **REMOVED**: only in planning snapshot and NOT moved to another sprint (descoped to backlog)
 - **CARRIED_OVER**: only in planning snapshot but moved to a different sprint iteration
 
-The velocity calculator uses scope_status as follows:
+All velocity stats are computed at both team and individual level using shared accumulation logic (`_accumulate` / `_finalize`). The velocity calculator uses scope_status as follows:
 
 - **planned_points** = COMMITTED + REMOVED + CARRIED_OVER (what was in the planning snapshot)
 - **delivered_points** = closed items that are COMMITTED or ADDED_MID_SPRINT

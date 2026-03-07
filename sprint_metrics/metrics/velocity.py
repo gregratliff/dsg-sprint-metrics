@@ -17,71 +17,66 @@ _CARRYOVER_STATUSES = {ScopeStatus.COMMITTED, ScopeStatus.ADDED_MID_SPRINT, Scop
 _SCOPE_REMOVED_STATUSES = {ScopeStatus.REMOVED, ScopeStatus.CARRIED_OVER}
 
 
-def calculate_velocity(work_items: list[WorkItem]) -> dict:
-    per_person: dict[str, dict[str, float]] = defaultdict(
-        lambda: {
-            "planned_points": 0.0,
-            "delivered_points": 0.0,
-        }
-    )
+def _empty_accum() -> dict[str, float]:
+    return {
+        "planned_points": 0.0,
+        "delivered_points": 0.0,
+        "committed_delivered": 0.0,
+        "scope_added_points": 0.0,
+        "scope_removed_points": 0.0,
+        "carryover_points": 0.0,
+    }
 
-    team_planned = 0.0
-    team_delivered = 0.0
-    team_committed_delivered = 0.0
-    team_scope_added = 0.0
-    team_scope_removed = 0.0
-    team_carryover = 0.0
+
+def _finalize(acc: dict[str, float]) -> dict[str, float]:
+    """Compute derived rates from accumulated counters."""
+    planned = acc["planned_points"]
+    delivered = acc["delivered_points"]
+    committed_delivered = acc.pop("committed_delivered")
+    return {
+        **acc,
+        "delivery_rate": delivered / planned if planned > 0 else 0.0,
+        "carryover_rate": acc["carryover_points"] / planned if planned > 0 else 0.0,
+        "commitment_reliability": committed_delivered / planned if planned > 0 else 0.0,
+    }
+
+
+def _accumulate(acc: dict[str, float], wi: WorkItem, pts: float) -> None:
+    """Accumulate a single work item's points into an accumulator dict."""
+    is_closed = wi.state in CLOSED_STATES
+
+    if wi.scope_status in _PLANNED_STATUSES:
+        acc["planned_points"] += pts
+
+    if is_closed and wi.scope_status in _DELIVERABLE_STATUSES:
+        acc["delivered_points"] += pts
+        if wi.scope_status == ScopeStatus.COMMITTED:
+            acc["committed_delivered"] += pts
+
+    if wi.scope_status == ScopeStatus.ADDED_MID_SPRINT:
+        acc["scope_added_points"] += pts
+    elif wi.scope_status in _SCOPE_REMOVED_STATUSES:
+        acc["scope_removed_points"] += pts
+
+    if wi.scope_status == ScopeStatus.CARRIED_OVER:
+        acc["carryover_points"] += pts
+    elif not is_closed and wi.scope_status in _CARRYOVER_STATUSES:
+        acc["carryover_points"] += pts
+
+
+def calculate_velocity(work_items: list[WorkItem]) -> dict:
+    team_acc = _empty_accum()
+    per_person: dict[str, dict[str, float]] = defaultdict(_empty_accum)
 
     for wi in work_items:
         pts = wi.story_points
         if not pts:
             continue
 
-        person = wi.assigned_to
-        is_closed = wi.state in CLOSED_STATES
-
-        # Planned = items that were in the planning snapshot
-        if wi.scope_status in _PLANNED_STATUSES:
-            per_person[person]["planned_points"] += pts
-            team_planned += pts
-
-        # Delivered = closed items that are in the end-of-sprint snapshot
-        if is_closed and wi.scope_status in _DELIVERABLE_STATUSES:
-            per_person[person]["delivered_points"] += pts
-            team_delivered += pts
-
-            if wi.scope_status == ScopeStatus.COMMITTED:
-                team_committed_delivered += pts
-
-        # Scope tracking
-        if wi.scope_status == ScopeStatus.ADDED_MID_SPRINT:
-            team_scope_added += pts
-        elif wi.scope_status in _SCOPE_REMOVED_STATUSES:
-            team_scope_removed += pts
-
-        # Carryover: CARRIED_OVER always counts (even if closed in the next sprint,
-        # it wasn't delivered in THIS sprint). Other statuses only if not closed.
-        if wi.scope_status == ScopeStatus.CARRIED_OVER:
-            team_carryover += pts
-        elif not is_closed and wi.scope_status in _CARRYOVER_STATUSES:
-            team_carryover += pts
-
-    delivery_rate = team_delivered / team_planned if team_planned > 0 else 0.0
-    commitment_reliability = (
-        team_committed_delivered / team_planned if team_planned > 0 else 0.0
-    )
-    carryover_rate = team_carryover / team_planned if team_planned > 0 else 0.0
+        _accumulate(team_acc, wi, pts)
+        _accumulate(per_person[wi.assigned_to], wi, pts)
 
     return {
-        "team": {
-            "planned_points": team_planned,
-            "delivered_points": team_delivered,
-            "delivery_rate": delivery_rate,
-            "scope_added_points": team_scope_added,
-            "scope_removed_points": team_scope_removed,
-            "carryover_points": team_carryover,
-            "carryover_rate": carryover_rate,
-            "commitment_reliability": commitment_reliability,
-        },
-        "individual": dict(per_person),
+        "team": _finalize(team_acc),
+        "individual": {person: _finalize(acc) for person, acc in per_person.items()},
     }

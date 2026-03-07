@@ -214,3 +214,46 @@ class TestCalculateVelocity:
 
         # scope_removed = 3 (carried_over) + 2 (removed) = 5
         assert result["team"]["scope_removed_points"] == 5.0
+
+    def test_individual_scope_stats(self):
+        """Individual members should have all scope-related stats."""
+        items = [
+            # Jane: 5 committed closed, 3 committed active, 2 added closed
+            make_work_item(id_=1, assigned_to="jane", story_points=5.0,
+                           state="Closed", scope_status=ScopeStatus.COMMITTED),
+            make_work_item(id_=2, assigned_to="jane", story_points=3.0,
+                           state="Active", scope_status=ScopeStatus.COMMITTED),
+            make_work_item(id_=3, assigned_to="jane", story_points=2.0,
+                           state="Closed", scope_status=ScopeStatus.ADDED_MID_SPRINT),
+            # John: 8 committed closed, 4 carried over, 2 removed
+            make_work_item(id_=4, assigned_to="john", story_points=8.0,
+                           state="Closed", scope_status=ScopeStatus.COMMITTED),
+            make_work_item(id_=5, assigned_to="john", story_points=4.0,
+                           state="Active", scope_status=ScopeStatus.CARRIED_OVER),
+            make_work_item(id_=6, assigned_to="john", story_points=2.0,
+                           state="Active", scope_status=ScopeStatus.REMOVED),
+        ]
+        result = calculate_velocity(items)
+
+        jane = result["individual"]["jane"]
+        # jane planned = 5 + 3 = 8 (committed only, added doesn't count)
+        assert jane["planned_points"] == 8.0
+        assert jane["delivered_points"] == 7.0  # 5 committed + 2 added
+        assert jane["delivery_rate"] == pytest.approx(7.0 / 8.0)
+        assert jane["scope_added_points"] == 2.0
+        assert jane["scope_removed_points"] == 0.0
+        assert jane["carryover_points"] == 3.0  # active committed
+        assert jane["carryover_rate"] == pytest.approx(3.0 / 8.0)
+        # commitment_reliability = closed committed / planned = 5/8
+        assert jane["commitment_reliability"] == pytest.approx(5.0 / 8.0)
+
+        john = result["individual"]["john"]
+        # john planned = 8 + 4 + 2 = 14 (committed + carried_over + removed)
+        assert john["planned_points"] == 14.0
+        assert john["delivered_points"] == 8.0  # only committed closed
+        assert john["delivery_rate"] == pytest.approx(8.0 / 14.0)
+        assert john["scope_added_points"] == 0.0
+        assert john["scope_removed_points"] == 6.0  # 4 carried + 2 removed
+        assert john["carryover_points"] == 4.0  # carried_over always counts
+        assert john["carryover_rate"] == pytest.approx(4.0 / 14.0)
+        assert john["commitment_reliability"] == pytest.approx(8.0 / 14.0)
