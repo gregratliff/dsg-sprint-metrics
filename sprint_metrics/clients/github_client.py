@@ -36,17 +36,20 @@ class GitHubClient:
         if end_date.tzinfo is None:
             end_date = end_date.replace(tzinfo=timezone.utc)
 
-        raw_prs = gh_repo.get_pulls(state="all", sort="created", direction="desc")
+        raw_prs = gh_repo.get_pulls(state="closed", sort="updated", direction="desc")
 
         results = []
         scanned = 0
         for pr in raw_prs:
             scanned += 1
-            # PRs are sorted newest-first; stop once we're before the sprint window
-            if pr.created_at < start_date:
-                logger.info("  Scanned %d PRs, reached pre-sprint date, stopping", scanned)
+            # PRs sorted by updated desc; stop once updated_at is before sprint
+            if pr.updated_at < start_date:
+                logger.info("  Scanned %d PRs, reached pre-sprint updated_at, stopping", scanned)
                 break
-            if pr.created_at > end_date:
+            # Only include PRs actually merged within the sprint window
+            if pr.merged_at is None:
+                continue
+            if pr.merged_at < start_date or pr.merged_at > end_date:
                 continue
             if team_usernames and pr.user.login not in team_usernames:
                 continue

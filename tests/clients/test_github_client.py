@@ -16,6 +16,7 @@ def _make_mock_pr(
     created_at=datetime(2026, 3, 1, 10, 0, 0, tzinfo=timezone.utc),
     merged_at=datetime(2026, 3, 2, 14, 0, 0, tzinfo=timezone.utc),
     closed_at=datetime(2026, 3, 2, 14, 0, 0, tzinfo=timezone.utc),
+    updated_at=None,
     commit_messages=None,
 ):
     pr = MagicMock()
@@ -26,6 +27,7 @@ def _make_mock_pr(
     pr.created_at = created_at
     pr.merged_at = merged_at
     pr.closed_at = closed_at
+    pr.updated_at = updated_at or merged_at or closed_at or created_at
 
     if commit_messages is None:
         commit_messages = ["AB#123 implement feature"]
@@ -81,28 +83,43 @@ class TestGitHubClient:
 
         assert prs[0].commit_messages == ["AB#100 first", "AB#200 second"]
 
-    def test_filters_by_date_range(self):
+    def test_filters_by_merge_date(self):
+        """Only PRs merged within the sprint window are included."""
         mock_gh = MagicMock()
         mock_repo = MagicMock()
         mock_gh.get_repo.return_value = mock_repo
 
-        in_range = _make_mock_pr(
+        # Merged during sprint — included
+        merged_in_sprint = _make_mock_pr(
             number=1,
             created_at=datetime(2026, 3, 2, tzinfo=timezone.utc),
+            merged_at=datetime(2026, 3, 3, tzinfo=timezone.utc),
         )
-        before_range = _make_mock_pr(
+        # Merged before sprint — excluded
+        merged_before = _make_mock_pr(
             number=2,
             created_at=datetime(2026, 2, 15, tzinfo=timezone.utc),
             merged_at=datetime(2026, 2, 16, tzinfo=timezone.utc),
-            closed_at=datetime(2026, 2, 16, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 3, 5, tzinfo=timezone.utc),  # updated during sprint (e.g. comment)
         )
-        after_range = _make_mock_pr(
+        # Created during sprint but not merged — excluded
+        unmerged = _make_mock_pr(
             number=3,
-            created_at=datetime(2026, 3, 10, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 2, tzinfo=timezone.utc),
             merged_at=None,
             closed_at=None,
+            updated_at=datetime(2026, 3, 4, tzinfo=timezone.utc),
         )
-        mock_repo.get_pulls.return_value = [in_range, before_range, after_range]
+        # Merged after sprint — excluded
+        merged_after = _make_mock_pr(
+            number=4,
+            created_at=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            merged_at=datetime(2026, 3, 10, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 3, 10, tzinfo=timezone.utc),
+        )
+        mock_repo.get_pulls.return_value = [
+            merged_after, unmerged, merged_in_sprint, merged_before,
+        ]
 
         client = self._make_client(mock_gh)
         prs = client.get_pull_requests(
@@ -114,13 +131,18 @@ class TestGitHubClient:
         assert len(prs) == 1
         assert prs[0].number == 1
 
-    def test_unmerged_pr(self):
+    def test_pr_created_before_sprint_merged_during_sprint(self):
+        """A PR created months ago but merged during the sprint is included."""
         mock_gh = MagicMock()
         mock_repo = MagicMock()
         mock_gh.get_repo.return_value = mock_repo
-        mock_repo.get_pulls.return_value = [
-            _make_mock_pr(merged_at=None, closed_at=None)
-        ]
+
+        old_pr_merged_now = _make_mock_pr(
+            number=42,
+            created_at=datetime(2026, 1, 10, tzinfo=timezone.utc),
+            merged_at=datetime(2026, 3, 4, tzinfo=timezone.utc),
+        )
+        mock_repo.get_pulls.return_value = [old_pr_merged_now]
 
         client = self._make_client(mock_gh)
         prs = client.get_pull_requests(
@@ -130,8 +152,26 @@ class TestGitHubClient:
         )
 
         assert len(prs) == 1
-        assert prs[0].merged_at is None
-        assert prs[0].cycle_time_hours is None
+        assert prs[0].number == 42
+
+    def test_unmerged_pr_excluded(self):
+        """Unmerged PRs are excluded — only merged PRs belong to a sprint."""
+        mock_gh = MagicMock()
+        mock_repo = MagicMock()
+        mock_gh.get_repo.return_value = mock_repo
+        mock_repo.get_pulls.return_value = [
+            _make_mock_pr(merged_at=None, closed_at=None,
+                          updated_at=datetime(2026, 3, 3, tzinfo=timezone.utc))
+        ]
+
+        client = self._make_client(mock_gh)
+        prs = client.get_pull_requests(
+            repo="myorg/repo1",
+            start_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            end_date=datetime(2026, 3, 7, tzinfo=timezone.utc),
+        )
+
+        assert len(prs) == 0
 
     def test_empty_repo(self):
         mock_gh = MagicMock()
@@ -186,23 +226,29 @@ class TestGitHubClient:
         assert len(prs) == 2
 
     def test_early_exit_skips_old_prs(self):
-        """PRs sorted newest-first; scanning stops at first PR before start_date."""
+        """Scanning stops at first PR whose updated_at is before start_date."""
         mock_gh = MagicMock()
         mock_repo = MagicMock()
         mock_gh.get_repo.return_value = mock_repo
 
-        # Sorted desc: in-range, then old, then even-older
+        # Sorted by updated desc: in-range, then old, then even-older
         in_range = _make_mock_pr(
             number=10,
-            created_at=datetime(2026, 3, 3, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            merged_at=datetime(2026, 3, 3, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 3, 3, tzinfo=timezone.utc),
         )
         old_pr = _make_mock_pr(
             number=5,
             created_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
+            merged_at=datetime(2026, 2, 2, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 2, 2, tzinfo=timezone.utc),
         )
         even_older = _make_mock_pr(
             number=1,
             created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            merged_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
         )
         mock_repo.get_pulls.return_value = [in_range, old_pr, even_older]
 

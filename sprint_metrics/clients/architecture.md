@@ -5,8 +5,11 @@ Clients are responsible for fetching raw data from external systems (Azure DevOp
 
 ## Design Patterns
 
+### Merge-date filtering
+PRs belong to a sprint if they were **merged** within the sprint window (`start_date <= merged_at <= end_date`). Unmerged PRs and PRs merged outside the window are excluded, regardless of when they were created. This ensures accurate "work completed" metrics.
+
 ### Early-exit scanning
-The GitHub client scans PRs in reverse chronological order and stops once it reaches PRs created before the sprint start date. This avoids paginating through the entire PR history.
+The GitHub client fetches closed PRs sorted by `updated_at` descending and stops once `updated_at` falls before the sprint start date. Since `updated_at >= merged_at`, any PR merged during the sprint will have `updated_at >= start_date`, so the early exit is safe.
 
 ### Team-scoped fetching
 The GitHub client accepts an optional `team_usernames` list to filter PRs at fetch time, reducing data transfer.
