@@ -143,12 +143,28 @@ def classify_sprint_scope(
     return result
 
 
+def _strip_revert_wrappers(title: str) -> str:
+    """Strip leading Revert \"...\" wrappers to get the original PR title."""
+    while title.startswith('Revert "'):
+        title = title[len('Revert "'):]
+        if title.endswith('"'):
+            title = title[:-1]
+    return title
+
+
 def filter_excluded_prs(prs: list[PullRequest], patterns: list[str]) -> list[PullRequest]:
-    """Remove PRs whose title matches any of the exclude patterns."""
+    """Remove PRs whose title matches any of the exclude patterns.
+
+    Also matches Revert chains — e.g., Revert "Revert "develop -> master""
+    is excluded if "develop -> master" matches a pattern.
+    """
     if not patterns:
         return prs
     compiled = [re.compile(p, re.IGNORECASE) for p in patterns]
-    return [pr for pr in prs if not any(rx.search(pr.title) for rx in compiled)]
+    return [
+        pr for pr in prs
+        if not any(rx.search(_strip_revert_wrappers(pr.title)) for rx in compiled)
+    ]
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

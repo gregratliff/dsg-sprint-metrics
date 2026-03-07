@@ -114,6 +114,51 @@ class TestFilterExcludedPrs:
         result = filter_excluded_prs(prs, patterns)
         assert len(result) == 0
 
+    def test_excludes_revert_of_excluded_pr(self):
+        """A Revert of an excluded PR should also be excluded."""
+        patterns = ["^develop -> master"]
+        prs = [
+            PullRequest(id=1, number=1, title='Revert "develop -> master 2026-03-02 2316"',
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        merged_at=None, closed_at=None, repo="r"),
+        ]
+        result = filter_excluded_prs(prs, patterns)
+        assert len(result) == 0
+
+    def test_excludes_nested_revert_of_excluded_pr(self):
+        """A Revert of a Revert of an excluded PR should also be excluded."""
+        patterns = ["^develop -> master"]
+        prs = [
+            PullRequest(id=1, number=1,
+                        title='Revert "Revert "develop -> master 2026-03-02 2316""',
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        merged_at=None, closed_at=None, repo="r"),
+        ]
+        result = filter_excluded_prs(prs, patterns)
+        assert len(result) == 0
+
+    def test_revert_of_non_excluded_pr_kept(self):
+        """A Revert of a normal PR should NOT be excluded."""
+        patterns = ["^develop -> master"]
+        prs = [
+            PullRequest(id=1, number=1, title='Revert "Fix login bug #1234"',
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        merged_at=None, closed_at=None, repo="r"),
+        ]
+        result = filter_excluded_prs(prs, patterns)
+        assert len(result) == 1
+
+    def test_excludes_revert_with_feature_deploy_pattern(self):
+        """Revert of a PR matching a non-anchored pattern should be excluded."""
+        patterns = ["feature/deploy"]
+        prs = [
+            PullRequest(id=1, number=1, title='Revert "feature/deploy hotfix"',
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        merged_at=None, closed_at=None, repo="r"),
+        ]
+        result = filter_excluded_prs(prs, patterns)
+        assert len(result) == 0
+
 
 class TestNormalizeMetricsIdentity:
     def _make_config_members(self):
