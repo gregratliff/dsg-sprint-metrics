@@ -1,0 +1,35 @@
+azure_devops:
+  organization: "your-org"
+  project: "your-project"
+  pat_env_var: "ADO_PAT"                # Environment variable holding your ADO Personal Access Token
+  category_field: "Custom.Category"     # ADO field reference name for work category
+  rework_labels:                        # Tags that QA applies to rework items
+    - "rework"
+    - "missed-ac"
+    - "qa-rejected"
+
+github:
+  org: "your-github-org"
+  repos:
+    - "repo1"
+    - "repo2"
+  pat_env_var: "GITHUB_PAT"            # Environment variable holding your GitHub PAT
+
+sprint:
+  name: "Sprint 23.1"
+  start_date: "2026-02-23"
+  end_date: "2026-03-06"
+
+team_members:
+  - name: "Jane Smith"
+    github_username: "janesmith"
+    ado_identity: "jane.smith@company.com"
+  - name: "John Doe"
+    github_username: "johndoe"
+    ado_identity: "john.doe@company.com"
+
+categories:
+  - "strategic"
+  - "tech_health"
+  - "defects"
+  - "operational"

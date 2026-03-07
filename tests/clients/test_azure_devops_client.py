@@ -1,0 +1,199 @@
+"""Tests for sprint_metrics.clients.azure_devops_client — Step 3 TDD."""
+from datetime import datetime, timezone
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from sprint_metrics.clients.azure_devops_client import AzureDevOpsClient
+from sprint_metrics.models import WorkItem
+
+
+def _make_ado_work_item(
+    id_,
+    title="Task",
+    assigned_to="jane.smith@company.com",
+    story_points=3.0,
+    state="Closed",
+    category="strategic",
+    tags="",
+    activated_date="2026-03-01T00:00:00Z",
+    closed_date="2026-03-04T00:00:00Z",
+    iteration_path="MyProject\\Sprint 10",
+):
+    """Build a mock ADO work item object."""
+    wi = MagicMock()
+    wi.id = id_
+    wi.fields = {
+        "System.Title": title,
+        "System.AssignedTo": {"uniqueName": assigned_to} if assigned_to else None,
+        "Microsoft.VSTS.Scheduling.StoryPoints": story_points,
+        "System.State": state,
+        "Custom.Category": category,
+        "System.Tags": tags,
+        "Microsoft.VSTS.Common.ActivatedDate": activated_date,
+        "Microsoft.VSTS.Common.ClosedDate": closed_date,
+        "System.IterationPath": iteration_path,
+    }
+    return wi
+
+
+class TestAzureDevOpsClient:
+    def _make_client(self, wit_client=None):
+        mock_connection = MagicMock()
+        mock_wit = wit_client or MagicMock()
+        mock_connection.clients.get_work_item_tracking_client.return_value = mock_wit
+        return AzureDevOpsClient(
+            connection=mock_connection,
+            project="MyProject",
+            category_field="Custom.Category",
+        )
+
+    def test_get_sprint_work_items_returns_work_items(self):
+        mock_wit = MagicMock()
+
+        # WIQL returns IDs
+        wiql_result = MagicMock()
+        wi_ref = MagicMock()
+        wi_ref.id = 101
+        wiql_result.work_items = [wi_ref]
+        mock_wit.query_by_wiql.return_value = wiql_result
+
+        # get_work_items returns full items
+        mock_wit.get_work_items.return_value = [
+            _make_ado_work_item(101, title="Login feature", story_points=5.0)
+        ]
+
+        client = self._make_client(mock_wit)
+        items = client.get_sprint_work_items("MyProject\\Sprint 10")
+
+        assert len(items) == 1
+        assert isinstance(items[0], WorkItem)
+        assert items[0].id == 101
+        assert items[0].title == "Login feature"
+        assert items[0].story_points == 5.0
+
+    def test_field_mapping(self):
+        mock_wit = MagicMock()
+        wiql_result = MagicMock()
+        wi_ref = MagicMock()
+        wi_ref.id = 200
+        wiql_result.work_items = [wi_ref]
+        mock_wit.query_by_wiql.return_value = wiql_result
+        mock_wit.get_work_items.return_value = [
+            _make_ado_work_item(
+                200,
+                title="Fix bug",
+                assigned_to="john.doe@company.com",
+                story_points=2.0,
+                state="Active",
+                category="defects",
+                tags="rework; missed-ac",
+                activated_date="2026-03-02T10:00:00Z",
+                closed_date=None,
+                iteration_path="MyProject\\Sprint 10",
+            )
+        ]
+
+        client = self._make_client(mock_wit)
+        items = client.get_sprint_work_items("MyProject\\Sprint 10")
+        wi = items[0]
+
+        assert wi.assigned_to == "john.doe@company.com"
+        assert wi.state == "Active"
+        assert wi.category == "defects"
+        assert wi.labels == ["rework", "missed-ac"]
+        assert wi.activated_date == datetime(2026, 3, 2, 10, 0, 0, tzinfo=timezone.utc)
+        assert wi.closed_date is None
+
+    def test_empty_wiql_result(self):
+        mock_wit = MagicMock()
+        wiql_result = MagicMock()
+        wiql_result.work_items = []
+        mock_wit.query_by_wiql.return_value = wiql_result
+
+        client = self._make_client(mock_wit)
+        items = client.get_sprint_work_items("MyProject\\Sprint 10")
+
+        assert items == []
+        mock_wit.get_work_items.assert_not_called()
+
+    def test_tags_parsing(self):
+        mock_wit = MagicMock()
+        wiql_result = MagicMock()
+        wi_ref = MagicMock()
+        wi_ref.id = 300
+        wiql_result.work_items = [wi_ref]
+        mock_wit.query_by_wiql.return_value = wiql_result
+        mock_wit.get_work_items.return_value = [
+            _make_ado_work_item(300, tags="tag1; tag2; tag3")
+        ]
+
+        client = self._make_client(mock_wit)
+        items = client.get_sprint_work_items("MyProject\\Sprint 10")
+
+        assert items[0].labels == ["tag1", "tag2", "tag3"]
+
+    def test_empty_tags(self):
+        mock_wit = MagicMock()
+        wiql_result = MagicMock()
+        wi_ref = MagicMock()
+        wi_ref.id = 301
+        wiql_result.work_items = [wi_ref]
+        mock_wit.query_by_wiql.return_value = wiql_result
+        mock_wit.get_work_items.return_value = [
+            _make_ado_work_item(301, tags="")
+        ]
+
+        client = self._make_client(mock_wit)
+        items = client.get_sprint_work_items("MyProject\\Sprint 10")
+
+        assert items[0].labels == []
+
+    def test_assigned_to_none(self):
+        mock_wit = MagicMock()
+        wiql_result = MagicMock()
+        wi_ref = MagicMock()
+        wi_ref.id = 302
+        wiql_result.work_items = [wi_ref]
+        mock_wit.query_by_wiql.return_value = wiql_result
+        mock_wit.get_work_items.return_value = [
+            _make_ado_work_item(302, assigned_to=None)
+        ]
+
+        client = self._make_client(mock_wit)
+        items = client.get_sprint_work_items("MyProject\\Sprint 10")
+
+        assert items[0].assigned_to == ""
+
+    def test_wiql_query_uses_iteration_path(self):
+        mock_wit = MagicMock()
+        wiql_result = MagicMock()
+        wiql_result.work_items = []
+        mock_wit.query_by_wiql.return_value = wiql_result
+
+        client = self._make_client(mock_wit)
+        client.get_sprint_work_items("MyProject\\Sprint 10")
+
+        call_args = mock_wit.query_by_wiql.call_args
+        wiql_obj = call_args[0][0]
+        assert "MyProject\\Sprint 10" in wiql_obj.query
+
+    def test_batches_large_id_lists(self):
+        mock_wit = MagicMock()
+        wiql_result = MagicMock()
+        # 250 work item refs — should be batched into groups of 200
+        refs = []
+        for i in range(250):
+            ref = MagicMock()
+            ref.id = i
+            refs.append(ref)
+        wiql_result.work_items = refs
+        mock_wit.query_by_wiql.return_value = wiql_result
+        mock_wit.get_work_items.return_value = [
+            _make_ado_work_item(i) for i in range(200)
+        ]
+
+        client = self._make_client(mock_wit)
+        client.get_sprint_work_items("P\\S1")
+
+        assert mock_wit.get_work_items.call_count == 2
