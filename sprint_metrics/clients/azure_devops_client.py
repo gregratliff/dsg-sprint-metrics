@@ -34,6 +34,25 @@ class AzureDevOpsClient:
             "System.IterationPath",
         ]
 
+    def _fetch_work_items_resilient(self, ids: list[int]) -> list:
+        """Fetch work items with batch-then-individual fallback for bad IDs."""
+        raw_items = []
+        for i in range(0, len(ids), BATCH_SIZE):
+            batch = ids[i : i + BATCH_SIZE]
+            try:
+                raw_items.extend(self._wit.get_work_items(batch, fields=self._fields))
+            except Exception:
+                for wid in batch:
+                    try:
+                        raw_items.extend(
+                            self._wit.get_work_items([wid], fields=self._fields)
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Work item %d not found or inaccessible — skipping", wid
+                        )
+        return raw_items
+
     def get_sprint_work_items(self, iteration_path: str) -> list[WorkItem]:
         wiql = Wiql(
             query=(
@@ -52,12 +71,7 @@ class AzureDevOpsClient:
             return []
 
         ids = [ref.id for ref in result.work_items]
-        raw_items = []
-        for i in range(0, len(ids), BATCH_SIZE):
-            batch = ids[i : i + BATCH_SIZE]
-            raw_items.extend(self._wit.get_work_items(batch, fields=self._fields))
-
-        return [self._to_work_item(raw) for raw in raw_items]
+        return [self._to_work_item(raw) for raw in self._fetch_work_items_resilient(ids)]
 
     def get_sprint_work_items_asof(
         self, iteration_path: str, asof_date: datetime,
@@ -83,34 +97,13 @@ class AzureDevOpsClient:
             return []
 
         ids = [ref.id for ref in result.work_items]
-        raw_items = []
-        for i in range(0, len(ids), BATCH_SIZE):
-            batch = ids[i : i + BATCH_SIZE]
-            raw_items.extend(self._wit.get_work_items(batch, fields=self._fields))
-
-        return [self._to_work_item(raw) for raw in raw_items]
+        return [self._to_work_item(raw) for raw in self._fetch_work_items_resilient(ids)]
 
     def get_work_items_by_ids(self, ids: list[int]) -> list[WorkItem]:
         """Fetch specific work items by their IDs."""
         if not ids:
             return []
-        raw_items = []
-        for i in range(0, len(ids), BATCH_SIZE):
-            batch = ids[i : i + BATCH_SIZE]
-            try:
-                raw_items.extend(self._wit.get_work_items(batch, fields=self._fields))
-            except Exception:
-                # Batch failed (likely a bad ID) — try individually
-                for wid in batch:
-                    try:
-                        raw_items.extend(
-                            self._wit.get_work_items([wid], fields=self._fields)
-                        )
-                    except Exception:
-                        logger.warning(
-                            "Work item %d not found or inaccessible — skipping", wid
-                        )
-        return [self._to_work_item(raw) for raw in raw_items]
+        return [self._to_work_item(raw) for raw in self._fetch_work_items_resilient(ids)]
 
     def _to_work_item(self, raw) -> WorkItem:
         f = raw.fields

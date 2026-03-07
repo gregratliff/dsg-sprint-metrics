@@ -291,3 +291,61 @@ class TestAzureDevOpsClient:
                 "MyProject\\Sprint 10",
                 datetime(2026, 3, 8, tzinfo=timezone.utc),
             )
+
+    def test_get_sprint_work_items_asof_skips_deleted_items(self):
+        """ASOF returns IDs that existed then; deleted items are skipped gracefully."""
+        mock_wit = MagicMock()
+        wiql_result = MagicMock()
+        # ASOF returns two IDs: 101 (still exists) and 999 (deleted since)
+        ref1 = MagicMock()
+        ref1.id = 101
+        ref2 = MagicMock()
+        ref2.id = 999
+        wiql_result.work_items = [ref1, ref2]
+        mock_wit.query_by_wiql.return_value = wiql_result
+
+        valid_item = _make_ado_work_item(101, title="Still exists")
+
+        def per_item_side_effect(ids, fields=None):
+            if ids == [101, 999]:
+                raise Exception("TF401232: Work item 999 does not exist")
+            if ids == [101]:
+                return [valid_item]
+            raise Exception("TF401232: Work item 999 does not exist")
+        mock_wit.get_work_items.side_effect = per_item_side_effect
+
+        client = self._make_client(mock_wit)
+        items = client.get_sprint_work_items_asof(
+            "MyProject\\Sprint 10",
+            datetime(2026, 3, 8, tzinfo=timezone.utc),
+        )
+
+        assert len(items) == 1
+        assert items[0].id == 101
+
+    def test_get_sprint_work_items_skips_deleted_items(self):
+        """Current query also handles deleted items gracefully."""
+        mock_wit = MagicMock()
+        wiql_result = MagicMock()
+        ref1 = MagicMock()
+        ref1.id = 101
+        ref2 = MagicMock()
+        ref2.id = 999
+        wiql_result.work_items = [ref1, ref2]
+        mock_wit.query_by_wiql.return_value = wiql_result
+
+        valid_item = _make_ado_work_item(101, title="Still exists")
+
+        def per_item_side_effect(ids, fields=None):
+            if ids == [101, 999]:
+                raise Exception("TF401232: Work item 999 does not exist")
+            if ids == [101]:
+                return [valid_item]
+            raise Exception("TF401232: Work item 999 does not exist")
+        mock_wit.get_work_items.side_effect = per_item_side_effect
+
+        client = self._make_client(mock_wit)
+        items = client.get_sprint_work_items("MyProject\\Sprint 10")
+
+        assert len(items) == 1
+        assert items[0].id == 101
