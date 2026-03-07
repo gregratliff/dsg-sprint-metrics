@@ -74,12 +74,15 @@ def run(
     iteration_path = f"{cfg.azure_devops.project}\\{cfg.sprint.name}"
 
     # Fetch data
+    print(f"Fetching ADO work items for '{iteration_path}'...")
     work_items = ado_client.get_sprint_work_items(iteration_path)
+    print(f"Found {len(work_items)} work items")
 
     all_prs = []
     team_usernames = [m.github_username for m in cfg.team_members]
     for repo_name in cfg.github.repos:
         repo_full = f"{cfg.github.org}/{repo_name}"
+        print(f"Fetching PRs from {repo_full}...")
         prs = gh_client.get_pull_requests(
             repo=repo_full,
             start_date=cfg.sprint.start_date,
@@ -87,6 +90,8 @@ def run(
             team_usernames=team_usernames,
         )
         all_prs.extend(prs)
+
+    print(f"Total: {len(all_prs)} PRs across {len(cfg.github.repos)} repos")
 
     # Calculate metrics
     metrics = {

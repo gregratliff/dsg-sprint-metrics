@@ -36,12 +36,19 @@ class GitHubClient:
         raw_prs = gh_repo.get_pulls(state="all", sort="created", direction="desc")
 
         results = []
+        scanned = 0
         for pr in raw_prs:
-            if pr.created_at < start_date or pr.created_at > end_date:
+            scanned += 1
+            # PRs are sorted newest-first; stop once we're before the sprint window
+            if pr.created_at < start_date:
+                print(f"  Scanned {scanned} PRs, reached pre-sprint date, stopping")
+                break
+            if pr.created_at > end_date:
                 continue
             if team_usernames and pr.user.login not in team_usernames:
                 continue
 
+            print(f"  PR #{pr.number}: {pr.title} ({pr.user.login})")
             commit_messages = [c.commit.message for c in pr.get_commits()]
 
             results.append(
@@ -58,4 +65,5 @@ class GitHubClient:
                 )
             )
 
+        print(f"  Found {len(results)} matching PRs in {repo}")
         return results
