@@ -38,6 +38,7 @@ class PullRequest:
     merged_at: Optional[datetime]
     closed_at: Optional[datetime]
     repo: str
+    body: str = ""
     commit_messages: list[str] = field(default_factory=list)
 
     @property
@@ -48,9 +49,19 @@ class PullRequest:
         return delta.total_seconds() / 3600
 
     def extract_work_item_ids(self) -> set[int]:
+        """Extract ADO work item IDs from PR title and commit messages.
+
+        Matches AB#12345 patterns in commit messages and leading numeric IDs
+        in the PR title (e.g., '1422900 RouteDetails: Stop Status Code Badge').
+        """
         ids: set[int] = set()
-        for msg in self.commit_messages:
-            for match in re.finditer(r"AB#(\d+)", msg):
+        # Check for leading numeric ID in title
+        title_match = re.match(r"^(\d{5,})\b", self.title)
+        if title_match:
+            ids.add(int(title_match.group(1)))
+        # Check for AB#ID patterns in title, body, and commit messages
+        for text in [self.title, self.body] + self.commit_messages:
+            for match in re.finditer(r"AB#(\d+)", text):
                 ids.add(int(match.group(1)))
         return ids
 

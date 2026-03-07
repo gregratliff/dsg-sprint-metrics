@@ -139,9 +139,6 @@ def run(
 
     # Filter to configured team members only
     team_identities = {m.ado_identity for m in cfg.team_members}
-    unique_assignees = sorted({wi.assigned_to for wi in work_items})
-    print(f"  ADO assigned_to values: {unique_assignees}")
-    print(f"  Config ado_identity values: {sorted(team_identities)}")
     before = len(work_items)
     work_items = filter_work_items_to_team(work_items, team_identities)
     excluded = before - len(work_items)
@@ -170,6 +167,21 @@ def run(
         excluded = before - len(all_prs)
         if excluded:
             print(f"Excluded {excluded} PRs matching exclude patterns")
+
+    # Fetch work items referenced in PRs but missing from sprint query
+    existing_wi_ids = {wi.id for wi in work_items}
+    pr_referenced_ids: set[int] = set()
+    for pr in all_prs:
+        pr_referenced_ids.update(pr.extract_work_item_ids())
+    missing_ids = sorted(pr_referenced_ids - existing_wi_ids)
+    if missing_ids:
+        print(f"Fetching {len(missing_ids)} PR-referenced work items not in sprint query...")
+        extra_items = ado_client.get_work_items_by_ids(missing_ids)
+        # Only keep items assigned to team members
+        extra_items = filter_work_items_to_team(extra_items, team_identities)
+        if extra_items:
+            print(f"  Added {len(extra_items)} work items from PR references")
+            work_items.extend(extra_items)
 
     # Calculate metrics
     metrics = {

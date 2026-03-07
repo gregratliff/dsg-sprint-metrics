@@ -61,6 +61,7 @@ class GitHubClient:
                     merged_at=pr.merged_at,
                     closed_at=pr.closed_at,
                     repo=repo,
+                    body=pr.body or "",
                     commit_messages=commit_messages,
                 )
             )

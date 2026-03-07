@@ -49,6 +49,27 @@ class AzureDevOpsClient:
 
         return [self._to_work_item(raw) for raw in raw_items]
 
+    def get_work_items_by_ids(self, ids: list[int]) -> list[WorkItem]:
+        """Fetch specific work items by their IDs."""
+        if not ids:
+            return []
+        fields = [
+            "System.Title",
+            "System.AssignedTo",
+            "Microsoft.VSTS.Scheduling.StoryPoints",
+            "System.State",
+            self._category_field,
+            "System.Tags",
+            "Microsoft.VSTS.Common.ActivatedDate",
+            "Microsoft.VSTS.Common.ClosedDate",
+            "System.IterationPath",
+        ]
+        raw_items = []
+        for i in range(0, len(ids), BATCH_SIZE):
+            batch = ids[i : i + BATCH_SIZE]
+            raw_items.extend(self._wit.get_work_items(batch, fields=fields))
+        return [self._to_work_item(raw) for raw in raw_items]
+
     def _to_work_item(self, raw) -> WorkItem:
         f = raw.fields
         assigned = f.get("System.AssignedTo")

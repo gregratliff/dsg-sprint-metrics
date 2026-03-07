@@ -135,7 +135,7 @@ class TestPullRequest:
         )
         assert pr.cycle_time_hours is None
 
-    def test_extract_work_item_ids(self):
+    def test_extract_work_item_ids_from_commit_messages(self):
         pr = PullRequest(
             id=3,
             number=12,
@@ -155,6 +155,61 @@ class TestPullRequest:
         ids = pr.extract_work_item_ids()
         assert ids == {123, 456, 789}
 
+    def test_extract_work_item_ids_from_title_leading_number(self):
+        pr = PullRequest(
+            id=5,
+            number=14,
+            title="1422900 RouteDetails: Stop Status Code Badge",
+            author="a",
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            merged_at=None,
+            closed_at=None,
+            repo="o/r",
+        )
+        assert pr.extract_work_item_ids() == {1422900}
+
+    def test_extract_work_item_ids_from_title_ab_hash(self):
+        pr = PullRequest(
+            id=6,
+            number=15,
+            title="Fix bug AB#99999 in routing",
+            author="a",
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            merged_at=None,
+            closed_at=None,
+            repo="o/r",
+        )
+        assert pr.extract_work_item_ids() == {99999}
+
+    def test_extract_work_item_ids_from_body(self):
+        pr = PullRequest(
+            id=7,
+            number=16,
+            title="Enable drowsiness detection",
+            author="a",
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            merged_at=None,
+            closed_at=None,
+            repo="o/r",
+            body="Related to AB#54321 and AB#67890",
+        )
+        assert pr.extract_work_item_ids() == {54321, 67890}
+
+    def test_extract_work_item_ids_combined_sources(self):
+        pr = PullRequest(
+            id=8,
+            number=17,
+            title="1430241 driver scorecard fix",
+            author="a",
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            merged_at=None,
+            closed_at=None,
+            repo="o/r",
+            body="Also fixes AB#99999",
+            commit_messages=["AB#11111 commit msg"],
+        )
+        assert pr.extract_work_item_ids() == {1430241, 99999, 11111}
+
     def test_extract_work_item_ids_empty(self):
         pr = PullRequest(
             id=4,
@@ -166,6 +221,20 @@ class TestPullRequest:
             closed_at=None,
             repo="o/r",
             commit_messages=["no references"],
+        )
+        assert pr.extract_work_item_ids() == set()
+
+    def test_extract_work_item_ids_short_number_not_matched(self):
+        """Leading numbers shorter than 5 digits should not match as work item IDs."""
+        pr = PullRequest(
+            id=9,
+            number=18,
+            title="1234 short number title",
+            author="a",
+            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            merged_at=None,
+            closed_at=None,
+            repo="o/r",
         )
         assert pr.extract_work_item_ids() == set()
 
