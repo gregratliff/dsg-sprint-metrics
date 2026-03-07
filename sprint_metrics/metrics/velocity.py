@@ -8,11 +8,13 @@ from sprint_metrics.models import ScopeStatus, WorkItem
 CLOSED_STATES = {"Closed", "Done", "Resolved"}
 
 # Scope statuses that count toward "planned" (items in the planning snapshot)
-_PLANNED_STATUSES = {ScopeStatus.COMMITTED, ScopeStatus.REMOVED}
+_PLANNED_STATUSES = {ScopeStatus.COMMITTED, ScopeStatus.REMOVED, ScopeStatus.CARRIED_OVER}
 # Scope statuses that can contribute to "delivered" (items in end-of-sprint snapshot)
 _DELIVERABLE_STATUSES = {ScopeStatus.COMMITTED, ScopeStatus.ADDED_MID_SPRINT}
-# Scope statuses that can carry over (still in sprint but not closed)
-_CARRYOVER_STATUSES = {ScopeStatus.COMMITTED, ScopeStatus.ADDED_MID_SPRINT}
+# Scope statuses that can carry over (not completed within the sprint)
+_CARRYOVER_STATUSES = {ScopeStatus.COMMITTED, ScopeStatus.ADDED_MID_SPRINT, ScopeStatus.CARRIED_OVER}
+# Scope statuses that count as "removed from sprint" (descoped or carried over)
+_SCOPE_REMOVED_STATUSES = {ScopeStatus.REMOVED, ScopeStatus.CARRIED_OVER}
 
 
 def calculate_velocity(work_items: list[WorkItem]) -> dict:
@@ -54,7 +56,7 @@ def calculate_velocity(work_items: list[WorkItem]) -> dict:
         # Scope tracking
         if wi.scope_status == ScopeStatus.ADDED_MID_SPRINT:
             team_scope_added += pts
-        elif wi.scope_status == ScopeStatus.REMOVED:
+        elif wi.scope_status in _SCOPE_REMOVED_STATUSES:
             team_scope_removed += pts
 
         # Carryover = non-closed items still in the sprint

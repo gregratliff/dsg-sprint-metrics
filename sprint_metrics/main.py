@@ -71,16 +71,41 @@ def filter_work_items_to_team(
     return [wi for wi in work_items if wi.assigned_to in team_identities]
 
 
+def _is_different_sprint(
+    current_iteration: str, sprint_iteration: str,
+) -> bool:
+    """Return True if current_iteration is a different sprint, not just the backlog.
+
+    An item moved to a parent/prefix of the sprint iteration path is on the backlog.
+    An item moved to a sibling or unrelated iteration path is in a different sprint.
+    """
+    if not current_iteration or not sprint_iteration:
+        return False
+    # If the sprint path starts with the current path, the item was moved to
+    # a parent (backlog), not a different sprint.
+    if sprint_iteration.startswith(current_iteration):
+        return False
+    return current_iteration != sprint_iteration
+
+
 def classify_sprint_scope(
     planned_items: list[WorkItem],
     end_of_sprint_items: list[WorkItem],
+    *,
+    current_items_by_id: dict[int, WorkItem] | None = None,
+    sprint_iteration_path: str = "",
 ) -> list[WorkItem]:
     """Classify work items by comparing planning snapshot vs end-of-sprint snapshot.
 
     Returns unified list with scope_status set on each item:
     - COMMITTED: in both snapshots (uses end-of-sprint data for current state)
-    - REMOVED: only in planning snapshot (descoped / rolled over)
+    - REMOVED: only in planning snapshot and not moved to another sprint
+    - CARRIED_OVER: only in planning snapshot but moved to a different sprint iteration
     - ADDED_MID_SPRINT: only in end-of-sprint snapshot (scope creep)
+
+    When current_items_by_id is provided, items missing from the end-of-sprint
+    snapshot are checked against their current iteration path to distinguish
+    true removals from items carried over to another sprint.
     """
     planned_by_id = {wi.id: wi for wi in planned_items}
     end_by_id = {wi.id: wi for wi in end_of_sprint_items}
@@ -96,11 +121,18 @@ def classify_sprint_scope(
         wi.scope_status = ScopeStatus.COMMITTED
         result.append(wi)
 
-    # Items only in planning — removed mid-sprint
+    # Items only in planning — removed or carried over
     for wi_id in planned_ids - end_ids:
-        wi = planned_by_id[wi_id]
-        wi.scope_status = ScopeStatus.REMOVED
-        result.append(wi)
+        current_wi = (current_items_by_id or {}).get(wi_id)
+        if current_wi and _is_different_sprint(
+            current_wi.iteration_path, sprint_iteration_path,
+        ):
+            current_wi.scope_status = ScopeStatus.CARRIED_OVER
+            result.append(current_wi)
+        else:
+            wi = planned_by_id[wi_id]
+            wi.scope_status = ScopeStatus.REMOVED
+            result.append(wi)
 
     # Items only in end-of-sprint — added mid-sprint
     for wi_id in end_ids - planned_ids:
@@ -213,8 +245,27 @@ def run(
     planned_items = filter_work_items_to_team(planned_items, team_identities)
     end_items = filter_work_items_to_team(end_items, team_identities)
 
+    # Identify items that left the sprint (in planned but not end-of-sprint)
+    planned_ids = {wi.id for wi in planned_items}
+    end_ids = {wi.id for wi in end_items}
+    removed_ids = sorted(planned_ids - end_ids)
+
+    # Fetch current state of removed items to distinguish carryover vs true removal
+    current_items_by_id: dict[int, WorkItem] = {}
+    if removed_ids:
+        logger.info(
+            "Fetching current state of %d items removed from sprint...",
+            len(removed_ids),
+        )
+        current_items = ado_client.get_work_items_by_ids(removed_ids)
+        current_items_by_id = {wi.id: wi for wi in current_items}
+
     # Classify scope
-    work_items = classify_sprint_scope(planned_items, end_items)
+    work_items = classify_sprint_scope(
+        planned_items, end_items,
+        current_items_by_id=current_items_by_id,
+        sprint_iteration_path=iteration_path,
+    )
 
     # Log scope changes
     for wi in work_items:
@@ -222,6 +273,11 @@ def run(
             logger.warning(
                 "Work item %d (%s) removed from sprint — %.1f points descoped",
                 wi.id, wi.title, wi.story_points or 0,
+            )
+        elif wi.scope_status == ScopeStatus.CARRIED_OVER:
+            logger.info(
+                "Work item %d (%s) carried over to %s — %.1f points",
+                wi.id, wi.title, wi.iteration_path, wi.story_points or 0,
             )
         elif wi.scope_status == ScopeStatus.ADDED_MID_SPRINT:
             logger.info(

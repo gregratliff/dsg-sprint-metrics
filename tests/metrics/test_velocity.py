@@ -135,3 +135,61 @@ class TestCalculateVelocity:
 
         # planned = 8 (committed items: 5+3), committed_delivered = 5
         assert result["team"]["commitment_reliability"] == pytest.approx(5.0 / 8.0)
+
+    def test_carried_over_counts_as_planned(self):
+        """CARRIED_OVER items count toward planned points (like REMOVED)."""
+        items = [
+            make_work_item(id_=1, story_points=5.0, state="Closed",
+                           scope_status=ScopeStatus.COMMITTED),
+            make_work_item(id_=2, story_points=3.0, state="Active",
+                           scope_status=ScopeStatus.CARRIED_OVER),
+        ]
+        result = calculate_velocity(items)
+
+        # planned = 5 (committed) + 3 (carried_over) = 8
+        assert result["team"]["planned_points"] == 8.0
+
+    def test_carried_over_counts_as_carryover_points(self):
+        """CARRIED_OVER items count toward carryover_points."""
+        items = [
+            make_work_item(id_=1, story_points=5.0, state="Closed",
+                           scope_status=ScopeStatus.COMMITTED),
+            make_work_item(id_=2, story_points=3.0, state="Active",
+                           scope_status=ScopeStatus.CARRIED_OVER),
+            make_work_item(id_=3, story_points=2.0, state="Active",
+                           scope_status=ScopeStatus.COMMITTED),
+        ]
+        result = calculate_velocity(items)
+
+        # carryover = 3 (carried_over, non-closed) + 2 (committed, non-closed) = 5
+        assert result["team"]["carryover_points"] == 5.0
+        # planned = 5 + 3 + 2 = 10
+        assert result["team"]["carryover_rate"] == pytest.approx(5.0 / 10.0)
+
+    def test_carried_over_not_delivered(self):
+        """CARRIED_OVER items do NOT count toward delivered (they left the sprint)."""
+        items = [
+            make_work_item(id_=1, story_points=5.0, state="Closed",
+                           scope_status=ScopeStatus.COMMITTED),
+            make_work_item(id_=2, story_points=3.0, state="Closed",
+                           scope_status=ScopeStatus.CARRIED_OVER),
+        ]
+        result = calculate_velocity(items)
+
+        # delivered = only committed closed = 5 (NOT 8)
+        assert result["team"]["delivered_points"] == 5.0
+
+    def test_carried_over_tracks_scope_removed(self):
+        """CARRIED_OVER points should count toward scope_removed_points."""
+        items = [
+            make_work_item(id_=1, story_points=5.0, state="Closed",
+                           scope_status=ScopeStatus.COMMITTED),
+            make_work_item(id_=2, story_points=3.0, state="Active",
+                           scope_status=ScopeStatus.CARRIED_OVER),
+            make_work_item(id_=3, story_points=2.0, state="Active",
+                           scope_status=ScopeStatus.REMOVED),
+        ]
+        result = calculate_velocity(items)
+
+        # scope_removed = 3 (carried_over) + 2 (removed) = 5
+        assert result["team"]["scope_removed_points"] == 5.0

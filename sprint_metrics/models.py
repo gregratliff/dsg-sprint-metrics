@@ -12,6 +12,7 @@ class ScopeStatus(str, Enum):
     COMMITTED = "committed"
     ADDED_MID_SPRINT = "added"
     REMOVED = "removed"
+    CARRIED_OVER = "carried_over"
 
 
 @dataclass

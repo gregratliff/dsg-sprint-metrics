@@ -606,3 +606,91 @@ class TestClassifySprintScope:
         end = [self._make_wi(1, state="Closed")]
         result = classify_sprint_scope(planned, end)
         assert result[0].state == "Closed"
+
+    def test_removed_item_moved_to_another_sprint_is_carried_over(self):
+        """Item in planned but not end-of-sprint, currently in a different sprint iteration."""
+        planned = [self._make_wi(1)]
+        end = []
+        # Current state shows item moved to Sprint 11
+        current_wi = self._make_wi(1)
+        current_wi.iteration_path = "P\\Sprint 11"
+        current_items_by_id = {1: current_wi}
+        result = classify_sprint_scope(
+            planned, end,
+            current_items_by_id=current_items_by_id,
+            sprint_iteration_path="P\\Sprint 10",
+        )
+        assert len(result) == 1
+        assert result[0].scope_status == ScopeStatus.CARRIED_OVER
+
+    def test_removed_item_moved_to_backlog_stays_removed(self):
+        """Item moved to parent iteration (backlog) stays REMOVED."""
+        planned = [self._make_wi(1)]
+        end = []
+        # Current state: item moved to project-level backlog (parent of sprint path)
+        current_wi = self._make_wi(1)
+        current_wi.iteration_path = "P"
+        current_items_by_id = {1: current_wi}
+        result = classify_sprint_scope(
+            planned, end,
+            current_items_by_id=current_items_by_id,
+            sprint_iteration_path="P\\Sprint 10",
+        )
+        assert len(result) == 1
+        assert result[0].scope_status == ScopeStatus.REMOVED
+
+    def test_removed_item_not_in_current_stays_removed(self):
+        """Item not found in current lookup (deleted?) stays REMOVED."""
+        planned = [self._make_wi(1)]
+        end = []
+        current_items_by_id = {}  # item not found
+        result = classify_sprint_scope(
+            planned, end,
+            current_items_by_id=current_items_by_id,
+            sprint_iteration_path="P\\Sprint 10",
+        )
+        assert len(result) == 1
+        assert result[0].scope_status == ScopeStatus.REMOVED
+
+    def test_carried_over_uses_current_data(self):
+        """Carried-over items should use current state data (not stale planning snapshot)."""
+        planned = [self._make_wi(1, state="Active")]
+        end = []
+        current_wi = self._make_wi(1, state="Closed")
+        current_wi.iteration_path = "P\\Sprint 11"
+        current_items_by_id = {1: current_wi}
+        result = classify_sprint_scope(
+            planned, end,
+            current_items_by_id=current_items_by_id,
+            sprint_iteration_path="P\\Sprint 10",
+        )
+        assert result[0].state == "Closed"
+        assert result[0].scope_status == ScopeStatus.CARRIED_OVER
+
+    def test_backward_compatible_without_current_items(self):
+        """Without current_items_by_id, behaves like before (all removed stay REMOVED)."""
+        planned = [self._make_wi(1)]
+        end = []
+        result = classify_sprint_scope(planned, end)
+        assert result[0].scope_status == ScopeStatus.REMOVED
+
+    def test_mixed_with_carryover(self):
+        """Mixed scenario: committed, added, removed, and carried-over."""
+        planned = [self._make_wi(1), self._make_wi(2), self._make_wi(3)]
+        end = [self._make_wi(1), self._make_wi(4)]
+        # Item 2 moved to next sprint, item 3 moved to backlog
+        current_2 = self._make_wi(2)
+        current_2.iteration_path = "P\\Sprint 11"
+        current_3 = self._make_wi(3)
+        current_3.iteration_path = "P"
+        current_items_by_id = {2: current_2, 3: current_3}
+        result = classify_sprint_scope(
+            planned, end,
+            current_items_by_id=current_items_by_id,
+            sprint_iteration_path="P\\Sprint 10",
+        )
+        by_id = {wi.id: wi for wi in result}
+        assert by_id[1].scope_status == ScopeStatus.COMMITTED
+        assert by_id[2].scope_status == ScopeStatus.CARRIED_OVER
+        assert by_id[3].scope_status == ScopeStatus.REMOVED
+        assert by_id[4].scope_status == ScopeStatus.ADDED_MID_SPRINT

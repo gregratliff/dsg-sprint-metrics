@@ -43,10 +43,24 @@ Metric modules are stateless — no classes, no side effects. They receive lists
 
 ## Scope-Aware Velocity
 
-Work items carry a `scope_status` (`COMMITTED`, `ADDED_MID_SPRINT`, `REMOVED`) set by `classify_sprint_scope()` in `main.py`. The velocity calculator uses this:
+Work items carry a `scope_status` set by `classify_sprint_scope()` in `main.py`. There are four statuses:
 
-- **planned_points** = COMMITTED + REMOVED items (what was in the planning snapshot)
+- **COMMITTED**: in both planning and end-of-sprint snapshots
+- **ADDED_MID_SPRINT**: only in end-of-sprint snapshot (scope creep)
+- **REMOVED**: only in planning snapshot and NOT moved to another sprint (descoped to backlog)
+- **CARRIED_OVER**: only in planning snapshot but moved to a different sprint iteration
+
+The velocity calculator uses scope_status as follows:
+
+- **planned_points** = COMMITTED + REMOVED + CARRIED_OVER (what was in the planning snapshot)
 - **delivered_points** = closed items that are COMMITTED or ADDED_MID_SPRINT
-- **scope_added/removed** = points added or removed mid-sprint
-- **carryover_points** = non-closed items still in the sprint (COMMITTED or ADDED)
+- **scope_added_points** = ADDED_MID_SPRINT points
+- **scope_removed_points** = REMOVED + CARRIED_OVER points (all items that left the sprint)
+- **carryover_points** = non-closed COMMITTED/ADDED items + all CARRIED_OVER items
 - **commitment_reliability** = closed COMMITTED items / planned_points
+
+### Carryover detection
+
+To distinguish REMOVED from CARRIED_OVER, the pipeline fetches the **current state** of items that left the sprint (via `get_work_items_by_ids`). If the item's current `iteration_path` is a different sprint (not a parent/backlog path), it's CARRIED_OVER. If it's on the backlog, deleted, or not found, it stays REMOVED.
+
+The heuristic: if `sprint_iteration_path` starts with `current_iteration_path`, the item was moved to a parent (backlog) → REMOVED. Otherwise, if the paths differ → CARRIED_OVER.

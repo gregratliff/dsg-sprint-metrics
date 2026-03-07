@@ -19,6 +19,9 @@ The ADO client supports `get_sprint_work_items_asof(iteration_path, asof_date)` 
 - **Planning snapshot** (`start_date + planning_offset_days`): what was committed after planning settled
 - **End-of-sprint snapshot** (`end_date`): what was in the sprint when it ended (or current state if sprint is in progress)
 
+### Carryover detection
+For items that left the sprint (in planning snapshot but not end-of-sprint), the pipeline uses `get_work_items_by_ids` to fetch their **current** state. This reveals whether the item was moved to another sprint iteration (CARRIED_OVER) or to the backlog/deleted (REMOVED). The current iteration path is compared against the sprint's iteration path to make this distinction.
+
 ### Date normalization
 Config dates may be naive; clients normalize them to UTC-aware datetimes before comparing with API timestamps.
 
