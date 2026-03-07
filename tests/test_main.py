@@ -489,6 +489,40 @@ class TestRun:
         assert any("56789" in w and "#99" in w and "janesmith" in w for w in warnings), \
             f"Expected warning about work item 56789 from PR #99 by janesmith, got: {warnings}"
 
+    def test_pr_with_no_work_item_reference_warns(self, tmp_path, caplog):
+        """PRs with no work item ID in title, body, or commits should warn."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(VALID_YAML)
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        mock_ado = MagicMock()
+        mock_ado.get_sprint_work_items.return_value = _sample_work_items()
+
+        # PR with no work item reference at all
+        no_ref_pr = PullRequest(
+            id=800, number=55, title="Fix flaky test", author="johndoe",
+            created_at=datetime(2026, 3, 2, 10, 0, 0, tzinfo=timezone.utc),
+            merged_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=timezone.utc),
+            closed_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=timezone.utc),
+            repo="myorg/repo1", body="", commit_messages=["fix the test"],
+        )
+        mock_gh = MagicMock()
+        mock_gh.get_pull_requests.return_value = _sample_prs() + [no_ref_pr]
+
+        with patch("sprint_metrics.main._create_ado_client", return_value=mock_ado), \
+             patch("sprint_metrics.main._create_github_client", return_value=mock_gh), \
+             patch.dict(os.environ, {"ADO_PAT": "fake", "GITHUB_PAT": "fake"}), \
+             caplog.at_level(logging.WARNING):
+            run(config_path=str(cfg_file), output_dir=str(output_dir))
+
+        report_path = output_dir / "Sprint_10_report.csv"
+        assert report_path.exists()
+
+        warnings = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        assert any("#55" in w and "johndoe" in w and "no work item" in w.lower() for w in warnings), \
+            f"Expected warning about PR #55 by johndoe having no work item reference, got: {warnings}"
+
     def test_output_dir_not_found_raises_clear_error(self, tmp_path):
         """Non-existent output directory gives a clear error message."""
         cfg_file = tmp_path / "config.yaml"

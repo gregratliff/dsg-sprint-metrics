@@ -175,6 +175,13 @@ def run(
         if excluded:
             logger.info("Excluded %d PRs matching exclude patterns", excluded)
 
+    # Warn about PRs with no work item reference
+    for pr in all_prs:
+        if not pr.extract_work_item_ids():
+            logger.warning(
+                "PR #%d (%s) has no work item reference", pr.number, pr.author,
+            )
+
     # Fetch work items referenced in PRs but missing from sprint query
     existing_wi_ids = {wi.id for wi in work_items}
     # Build mapping: work_item_id -> list of (PR number, PR author) for diagnostics
