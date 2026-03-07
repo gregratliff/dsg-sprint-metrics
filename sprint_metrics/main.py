@@ -104,7 +104,7 @@ def run(
     }
 
     # Write report
-    safe_name = cfg.sprint.name.replace(" ", "_")
+    safe_name = cfg.sprint.name.replace("\\", "_").replace("/", "_").replace(" ", "_")
     output_path = os.path.join(output_dir, f"{safe_name}_report.csv")
     write_sprint_report(metrics, output_path)
     print(f"Report written to {output_path}")

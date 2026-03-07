@@ -134,6 +134,29 @@ class TestRun:
         csv_files = list(tmp_path.glob("*.csv"))
         assert len(csv_files) == 0
 
+    def test_sprint_name_with_backslashes_produces_flat_filename(self, tmp_path):
+        yaml_with_path = VALID_YAML.replace(
+            'name: "Sprint 10"',
+            'name: "26\\\\Q1 2026\\\\Sprint 26.2.2"',
+        )
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(yaml_with_path)
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        mock_ado = MagicMock()
+        mock_ado.get_sprint_work_items.return_value = _sample_work_items()
+        mock_gh = MagicMock()
+        mock_gh.get_pull_requests.return_value = _sample_prs()
+
+        with patch("sprint_metrics.main._create_ado_client", return_value=mock_ado), \
+             patch("sprint_metrics.main._create_github_client", return_value=mock_gh), \
+             patch.dict(os.environ, {"ADO_PAT": "fake", "GITHUB_PAT": "fake"}):
+            run(config_path=str(cfg_file), output_dir=str(output_dir))
+
+        report_path = output_dir / "26_Q1_2026_Sprint_26.2.2_report.csv"
+        assert report_path.exists()
+
     def test_missing_pat_env_var_raises(self, tmp_path):
         cfg_file = tmp_path / "config.yaml"
         cfg_file.write_text(VALID_YAML)
