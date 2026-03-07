@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from sprint_metrics.models import WorkItem, PullRequest, SprintInfo
+from sprint_metrics.models import WorkItem, PullRequest, SprintInfo, ScopeStatus
 
 
 @pytest.fixture
@@ -27,6 +27,7 @@ def make_work_item(
     activated_date=datetime(2026, 3, 2, tzinfo=timezone.utc),
     closed_date=datetime(2026, 3, 5, tzinfo=timezone.utc),
     iteration_path="P\\Sprint 10",
+    scope_status=ScopeStatus.COMMITTED,
 ):
     return WorkItem(
         id=id_,
@@ -39,6 +40,7 @@ def make_work_item(
         activated_date=activated_date,
         closed_date=closed_date,
         iteration_path=iteration_path,
+        scope_status=scope_status,
     )
 
 

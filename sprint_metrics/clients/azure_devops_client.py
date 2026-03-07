@@ -59,6 +59,37 @@ class AzureDevOpsClient:
 
         return [self._to_work_item(raw) for raw in raw_items]
 
+    def get_sprint_work_items_asof(
+        self, iteration_path: str, asof_date: datetime,
+    ) -> list[WorkItem]:
+        """Query sprint membership as of a specific date using WIQL ASOF."""
+        asof_str = asof_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+        wiql = Wiql(
+            query=(
+                "SELECT [System.Id] FROM WorkItems "
+                f"WHERE [System.IterationPath] = '{iteration_path}' "
+                "AND [System.WorkItemType] IN ('User Story', 'Bug', 'Task', 'Feature') "
+                f"ASOF '{asof_str}'"
+            )
+        )
+        try:
+            result = self._wit.query_by_wiql(wiql, top=1000)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to query sprint work items for '{iteration_path}' "
+                f"as of {asof_str}: {exc}"
+            ) from exc
+        if not result.work_items:
+            return []
+
+        ids = [ref.id for ref in result.work_items]
+        raw_items = []
+        for i in range(0, len(ids), BATCH_SIZE):
+            batch = ids[i : i + BATCH_SIZE]
+            raw_items.extend(self._wit.get_work_items(batch, fields=self._fields))
+
+        return [self._to_work_item(raw) for raw in raw_items]
+
     def get_work_items_by_ids(self, ids: list[int]) -> list[WorkItem]:
         """Fetch specific work items by their IDs."""
         if not ids:

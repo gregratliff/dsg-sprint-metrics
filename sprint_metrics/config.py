@@ -34,6 +34,7 @@ class SprintConfig:
     name: str
     start_date: datetime
     end_date: datetime
+    planning_offset_days: int = 7
 
 
 @dataclass
@@ -107,6 +108,7 @@ def load_config(path: str) -> Config:
         end_date=datetime.fromisoformat(
             str(_require(sprint_raw, "end_date", "sprint"))
         ),
+        planning_offset_days=int(sprint_raw.get("planning_offset_days", 7)),
     )
 
     # Team members

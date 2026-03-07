@@ -165,3 +165,23 @@ class TestLoadConfig:
         cfg = load_config(str(cfg_file))
 
         assert cfg.github.pr_exclude_patterns == []
+
+    def test_planning_offset_days_default(self, tmp_path):
+        """planning_offset_days defaults to 7 when not specified."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(VALID_YAML)
+        cfg = load_config(str(cfg_file))
+
+        assert cfg.sprint.planning_offset_days == 7
+
+    def test_planning_offset_days_explicit(self, tmp_path):
+        """Explicit planning_offset_days is respected."""
+        yaml_with_offset = VALID_YAML.replace(
+            '  end_date: "2026-03-06"',
+            '  end_date: "2026-03-06"\n  planning_offset_days: 5',
+        )
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(yaml_with_offset)
+        cfg = load_config(str(cfg_file))
+
+        assert cfg.sprint.planning_offset_days == 5

@@ -9,9 +9,9 @@ import pytest
 
 from sprint_metrics.main import (
     run, parse_args, filter_excluded_prs, filter_work_items_to_team,
-    normalize_metrics_identity,
+    normalize_metrics_identity, classify_sprint_scope,
 )
-from sprint_metrics.models import WorkItem, PullRequest
+from sprint_metrics.models import WorkItem, PullRequest, ScopeStatus
 
 
 VALID_YAML = """\
@@ -241,6 +241,7 @@ class TestRun:
 
         mock_ado = MagicMock()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
+        mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
         mock_gh = MagicMock()
         mock_gh.get_pull_requests.return_value = _sample_prs()
 
@@ -287,6 +288,7 @@ class TestRun:
 
         mock_ado = MagicMock()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
+        mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
         mock_gh = MagicMock()
         mock_gh.get_pull_requests.return_value = _sample_prs()
 
@@ -306,6 +308,7 @@ class TestRun:
 
         mock_ado = MagicMock()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
+        mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
         mock_gh = MagicMock()
         mock_gh.get_pull_requests.return_value = _sample_prs()
 
@@ -348,6 +351,7 @@ class TestRun:
 
         mock_ado = MagicMock()
         mock_ado.get_sprint_work_items.return_value = items
+        mock_ado.get_sprint_work_items_asof.return_value = items
         mock_gh = MagicMock()
         mock_gh.get_pull_requests.return_value = _sample_prs()
 
@@ -393,6 +397,7 @@ class TestRun:
 
         mock_ado = MagicMock()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
+        mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
         mock_gh = MagicMock()
         mock_gh.get_pull_requests.return_value = prs_with_deploy
 
@@ -423,6 +428,7 @@ class TestRun:
 
         mock_ado = MagicMock()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
+        mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
 
         mock_gh = MagicMock()
         # First repo fails, second succeeds
@@ -457,6 +463,7 @@ class TestRun:
 
         mock_ado = MagicMock()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
+        mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
         # get_work_items_by_ids returns empty (all invalid IDs were skipped)
         mock_ado.get_work_items_by_ids.return_value = []
 
@@ -498,6 +505,7 @@ class TestRun:
 
         mock_ado = MagicMock()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
+        mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
 
         # PR with no work item reference at all
         no_ref_pr = PullRequest(
@@ -530,6 +538,7 @@ class TestRun:
 
         mock_ado = MagicMock()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
+        mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
         mock_gh = MagicMock()
         mock_gh.get_pull_requests.return_value = _sample_prs()
 
@@ -546,3 +555,54 @@ class TestRun:
         with patch.dict(os.environ, {}, clear=True), \
              pytest.raises(SystemExit):
             run(config_path=str(cfg_file), output_dir=str(tmp_path))
+
+
+class TestClassifySprintScope:
+    def _make_wi(self, id_, state="Closed", story_points=3.0, assigned_to="jane"):
+        return WorkItem(
+            id=id_, title=f"Item {id_}", assigned_to=assigned_to,
+            story_points=story_points, state=state, category="strategic",
+            labels=[], activated_date=None, closed_date=None,
+            iteration_path="P\\Sprint 10",
+        )
+
+    def test_item_in_both_snapshots_is_committed(self):
+        planned = [self._make_wi(1)]
+        end = [self._make_wi(1)]
+        result = classify_sprint_scope(planned, end)
+        assert len(result) == 1
+        assert result[0].scope_status == ScopeStatus.COMMITTED
+
+    def test_item_only_in_planned_is_removed(self):
+        planned = [self._make_wi(1)]
+        end = []
+        result = classify_sprint_scope(planned, end)
+        assert len(result) == 1
+        assert result[0].scope_status == ScopeStatus.REMOVED
+
+    def test_item_only_in_end_is_added(self):
+        planned = []
+        end = [self._make_wi(2)]
+        result = classify_sprint_scope(planned, end)
+        assert len(result) == 1
+        assert result[0].scope_status == ScopeStatus.ADDED_MID_SPRINT
+
+    def test_mixed_classification(self):
+        planned = [self._make_wi(1), self._make_wi(2)]
+        end = [self._make_wi(2), self._make_wi(3)]
+        result = classify_sprint_scope(planned, end)
+
+        by_id = {wi.id: wi for wi in result}
+        assert by_id[1].scope_status == ScopeStatus.REMOVED
+        assert by_id[2].scope_status == ScopeStatus.COMMITTED
+        assert by_id[3].scope_status == ScopeStatus.ADDED_MID_SPRINT
+
+    def test_empty_inputs(self):
+        assert classify_sprint_scope([], []) == []
+
+    def test_committed_uses_end_of_sprint_data(self):
+        """For items in both, use end-of-sprint data (more current state)."""
+        planned = [self._make_wi(1, state="Active")]
+        end = [self._make_wi(1, state="Closed")]
+        result = classify_sprint_scope(planned, end)
+        assert result[0].state == "Closed"

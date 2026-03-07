@@ -14,6 +14,11 @@ The GitHub client fetches closed PRs sorted by `updated_at` descending and stops
 ### Team-scoped fetching
 The GitHub client accepts an optional `team_usernames` list to filter PRs at fetch time, reducing data transfer.
 
+### ASOF queries for sprint scope tracking
+The ADO client supports `get_sprint_work_items_asof(iteration_path, asof_date)` which appends `ASOF '{date}'` to the WIQL query. This returns work items as they existed at a specific point in time. The pipeline uses two ASOF queries:
+- **Planning snapshot** (`start_date + planning_offset_days`): what was committed after planning settled
+- **End-of-sprint snapshot** (`end_date`): what was in the sprint when it ended (or current state if sprint is in progress)
+
 ### Date normalization
 Config dates may be naive; clients normalize them to UTC-aware datetimes before comparing with API timestamps.
 

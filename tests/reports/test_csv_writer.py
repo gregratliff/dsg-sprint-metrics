@@ -161,3 +161,26 @@ class TestWriteSprintReport:
             rows = list(reader)
 
         assert all(r["sprint"] == "Sprint 10" for r in rows)
+
+    def test_scope_and_carryover_columns(self, tmp_path, sample_metrics):
+        """New scope change and carryover columns appear in the report."""
+        sample_metrics["velocity"]["team"].update({
+            "scope_added_points": 5.0,
+            "scope_removed_points": 3.0,
+            "carryover_points": 4.0,
+            "carryover_rate": 0.133,
+            "commitment_reliability": 0.75,
+        })
+        output = str(tmp_path / "report.csv")
+        write_sprint_report(sample_metrics, output)
+
+        with open(output) as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+
+        team_row = [r for r in rows if r["member"] == "TEAM"][0]
+        assert team_row["scope_added_points"] == "5.0"
+        assert team_row["scope_removed_points"] == "3.0"
+        assert team_row["carryover_points"] == "4.0"
+        assert team_row["carryover_rate"] == "0.133"
+        assert team_row["commitment_reliability"] == "0.75"

@@ -4,7 +4,14 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from typing import Optional
+
+
+class ScopeStatus(str, Enum):
+    COMMITTED = "committed"
+    ADDED_MID_SPRINT = "added"
+    REMOVED = "removed"
 
 
 @dataclass
@@ -19,6 +26,7 @@ class WorkItem:
     activated_date: Optional[datetime]
     closed_date: Optional[datetime]
     iteration_path: str
+    scope_status: ScopeStatus = ScopeStatus.COMMITTED
 
     @property
     def cycle_time_days(self) -> Optional[float]:

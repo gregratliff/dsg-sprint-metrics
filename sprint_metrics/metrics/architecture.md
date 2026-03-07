@@ -28,7 +28,7 @@ Metric modules are stateless — no classes, no side effects. They receive lists
 
 | Module | Input | Individual Key | Key Metrics |
 |---|---|---|---|
-| `velocity` | `[WorkItem]` | `assigned_to` | planned_points, delivered_points, delivery_rate |
+| `velocity` | `[WorkItem]` | `assigned_to` | planned_points, delivered_points, delivery_rate, scope_added/removed, carryover, commitment_reliability |
 | `cycle_time` | `[WorkItem]` | `assigned_to` | average_days, median_days, count |
 | `pr_cycle_time` | `[PullRequest]` | `author` | average_hours, median_hours, count |
 | `rework` | `[WorkItem], labels` | `assigned_to` | rework_count, rework_points, rework_rate |
@@ -40,3 +40,13 @@ Metric modules are stateless — no classes, no side effects. They receive lists
 - Closed states: `{"Closed", "Done", "Resolved"}` (defined in `velocity.py`)
 - Rework label matching is case-insensitive
 - Category "other" is suppressed from output if its count is 0
+
+## Scope-Aware Velocity
+
+Work items carry a `scope_status` (`COMMITTED`, `ADDED_MID_SPRINT`, `REMOVED`) set by `classify_sprint_scope()` in `main.py`. The velocity calculator uses this:
+
+- **planned_points** = COMMITTED + REMOVED items (what was in the planning snapshot)
+- **delivered_points** = closed items that are COMMITTED or ADDED_MID_SPRINT
+- **scope_added/removed** = points added or removed mid-sprint
+- **carryover_points** = non-closed items still in the sprint (COMMITTED or ADDED)
+- **commitment_reliability** = closed COMMITTED items / planned_points

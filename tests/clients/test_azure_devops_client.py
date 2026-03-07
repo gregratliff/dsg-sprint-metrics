@@ -240,3 +240,54 @@ class TestAzureDevOpsClient:
         client = self._make_client(mock_wit)
         with pytest.raises(RuntimeError, match="Failed to query sprint work items"):
             client.get_sprint_work_items("MyProject\\Sprint 10")
+
+    def test_get_sprint_work_items_asof_includes_date_in_query(self):
+        """ASOF query includes the date in the WIQL string."""
+        mock_wit = MagicMock()
+        wiql_result = MagicMock()
+        wiql_result.work_items = []
+        mock_wit.query_by_wiql.return_value = wiql_result
+
+        client = self._make_client(mock_wit)
+        asof_date = datetime(2026, 3, 8, tzinfo=timezone.utc)
+        client.get_sprint_work_items_asof("MyProject\\Sprint 10", asof_date)
+
+        call_args = mock_wit.query_by_wiql.call_args
+        wiql_obj = call_args[0][0]
+        assert "ASOF" in wiql_obj.query
+        assert "2026-03-08" in wiql_obj.query
+        assert "MyProject\\Sprint 10" in wiql_obj.query
+
+    def test_get_sprint_work_items_asof_returns_work_items(self):
+        """ASOF query returns WorkItem list same as regular query."""
+        mock_wit = MagicMock()
+        wiql_result = MagicMock()
+        wi_ref = MagicMock()
+        wi_ref.id = 101
+        wiql_result.work_items = [wi_ref]
+        mock_wit.query_by_wiql.return_value = wiql_result
+        mock_wit.get_work_items.return_value = [
+            _make_ado_work_item(101, title="Planned item", story_points=5.0)
+        ]
+
+        client = self._make_client(mock_wit)
+        items = client.get_sprint_work_items_asof(
+            "MyProject\\Sprint 10",
+            datetime(2026, 3, 8, tzinfo=timezone.utc),
+        )
+
+        assert len(items) == 1
+        assert items[0].id == 101
+        assert items[0].title == "Planned item"
+
+    def test_get_sprint_work_items_asof_wraps_error(self):
+        """ASOF query failure is re-raised as RuntimeError."""
+        mock_wit = MagicMock()
+        mock_wit.query_by_wiql.side_effect = Exception("Timeout")
+
+        client = self._make_client(mock_wit)
+        with pytest.raises(RuntimeError, match="Failed to query sprint work items"):
+            client.get_sprint_work_items_asof(
+                "MyProject\\Sprint 10",
+                datetime(2026, 3, 8, tzinfo=timezone.utc),
+            )

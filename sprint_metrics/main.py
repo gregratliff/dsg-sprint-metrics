@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import sys
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ from sprint_metrics.metrics.cycle_time import calculate_cycle_times
 from sprint_metrics.metrics.pr_cycle_time import calculate_pr_cycle_times
 from sprint_metrics.metrics.rework import calculate_rework
 from sprint_metrics.metrics.category_breakdown import calculate_category_breakdown
-from sprint_metrics.models import PullRequest, WorkItem
+from sprint_metrics.models import PullRequest, ScopeStatus, WorkItem
 from sprint_metrics.reports.csv_writer import write_sprint_report
 
 
@@ -68,6 +69,46 @@ def filter_work_items_to_team(
 ) -> list[WorkItem]:
     """Keep only work items assigned to configured team members."""
     return [wi for wi in work_items if wi.assigned_to in team_identities]
+
+
+def classify_sprint_scope(
+    planned_items: list[WorkItem],
+    end_of_sprint_items: list[WorkItem],
+) -> list[WorkItem]:
+    """Classify work items by comparing planning snapshot vs end-of-sprint snapshot.
+
+    Returns unified list with scope_status set on each item:
+    - COMMITTED: in both snapshots (uses end-of-sprint data for current state)
+    - REMOVED: only in planning snapshot (descoped / rolled over)
+    - ADDED_MID_SPRINT: only in end-of-sprint snapshot (scope creep)
+    """
+    planned_by_id = {wi.id: wi for wi in planned_items}
+    end_by_id = {wi.id: wi for wi in end_of_sprint_items}
+
+    planned_ids = set(planned_by_id.keys())
+    end_ids = set(end_by_id.keys())
+
+    result: list[WorkItem] = []
+
+    # Items in both — committed, use end-of-sprint data (more current)
+    for wi_id in planned_ids & end_ids:
+        wi = end_by_id[wi_id]
+        wi.scope_status = ScopeStatus.COMMITTED
+        result.append(wi)
+
+    # Items only in planning — removed mid-sprint
+    for wi_id in planned_ids - end_ids:
+        wi = planned_by_id[wi_id]
+        wi.scope_status = ScopeStatus.REMOVED
+        result.append(wi)
+
+    # Items only in end-of-sprint — added mid-sprint
+    for wi_id in end_ids - planned_ids:
+        wi = end_by_id[wi_id]
+        wi.scope_status = ScopeStatus.ADDED_MID_SPRINT
+        result.append(wi)
+
+    return result
 
 
 def filter_excluded_prs(prs: list[PullRequest], patterns: list[str]) -> list[PullRequest]:
@@ -135,19 +176,58 @@ def run(
 
     # Build iteration path from project + sprint name
     iteration_path = f"{cfg.azure_devops.project}\\{cfg.sprint.name}"
-
-    # Fetch data
-    logger.info("Fetching ADO work items for '%s'...", iteration_path)
-    work_items = ado_client.get_sprint_work_items(iteration_path)
-    logger.info("Found %d work items", len(work_items))
-
-    # Filter to configured team members only
     team_identities = {m.ado_identity for m in cfg.team_members}
-    before = len(work_items)
-    work_items = filter_work_items_to_team(work_items, team_identities)
-    excluded = before - len(work_items)
-    if excluded:
-        logger.info("Filtered out %d work items not assigned to team members", excluded)
+
+    # Calculate planning snapshot date
+    planning_date = cfg.sprint.start_date + timedelta(days=cfg.sprint.planning_offset_days)
+    if planning_date > cfg.sprint.end_date:
+        logger.warning(
+            "planning_offset_days (%d) exceeds sprint duration — clamping to end_date",
+            cfg.sprint.planning_offset_days,
+        )
+        planning_date = cfg.sprint.end_date
+
+    # Ensure dates are timezone-aware for ASOF queries
+    if planning_date.tzinfo is None:
+        planning_date = planning_date.replace(tzinfo=timezone.utc)
+    end_date = cfg.sprint.end_date
+    if end_date.tzinfo is None:
+        end_date = end_date.replace(tzinfo=timezone.utc)
+
+    # Fetch planning snapshot (what was in sprint after planning settled)
+    logger.info("Fetching planning snapshot (as of %s)...", planning_date.date())
+    planned_items = ado_client.get_sprint_work_items_asof(iteration_path, planning_date)
+    logger.info("Planning snapshot: %d work items", len(planned_items))
+
+    # Fetch end-of-sprint snapshot
+    now = datetime.now(tz=timezone.utc)
+    if end_date <= now:
+        logger.info("Fetching end-of-sprint snapshot (as of %s)...", end_date.date())
+        end_items = ado_client.get_sprint_work_items_asof(iteration_path, end_date)
+    else:
+        logger.info("Sprint still in progress — using current state...")
+        end_items = ado_client.get_sprint_work_items(iteration_path)
+    logger.info("End-of-sprint snapshot: %d work items", len(end_items))
+
+    # Filter both snapshots to team members
+    planned_items = filter_work_items_to_team(planned_items, team_identities)
+    end_items = filter_work_items_to_team(end_items, team_identities)
+
+    # Classify scope
+    work_items = classify_sprint_scope(planned_items, end_items)
+
+    # Log scope changes
+    for wi in work_items:
+        if wi.scope_status == ScopeStatus.REMOVED:
+            logger.warning(
+                "Work item %d (%s) removed from sprint — %.1f points descoped",
+                wi.id, wi.title, wi.story_points or 0,
+            )
+        elif wi.scope_status == ScopeStatus.ADDED_MID_SPRINT:
+            logger.info(
+                "Work item %d (%s) added mid-sprint — %.1f points",
+                wi.id, wi.title, wi.story_points or 0,
+            )
 
     all_prs = []
     team_usernames = [m.github_username for m in cfg.team_members]
