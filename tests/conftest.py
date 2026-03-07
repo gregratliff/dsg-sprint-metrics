@@ -1,17 +1,17 @@
 """Shared test fixtures."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
-from sprint_metrics.models import WorkItem, PullRequest, SprintInfo, ScopeStatus
+from sprint_metrics.models import PullRequest, ScopeStatus, SprintInfo, WorkItem
 
 
 @pytest.fixture
 def sprint_info():
     return SprintInfo(
         name="Sprint 10",
-        start_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-        end_date=datetime(2026, 3, 14, tzinfo=timezone.utc),
+        start_date=datetime(2026, 3, 1, tzinfo=UTC),
+        end_date=datetime(2026, 3, 14, tzinfo=UTC),
         team="Team Alpha",
     )
 
@@ -24,8 +24,8 @@ def make_work_item(
     state="Closed",
     category="strategic",
     labels=None,
-    activated_date=datetime(2026, 3, 2, tzinfo=timezone.utc),
-    closed_date=datetime(2026, 3, 5, tzinfo=timezone.utc),
+    activated_date=datetime(2026, 3, 2, tzinfo=UTC),
+    closed_date=datetime(2026, 3, 5, tzinfo=UTC),
     iteration_path="P\\Sprint 10",
     scope_status=ScopeStatus.COMMITTED,
 ):
@@ -47,8 +47,8 @@ def make_work_item(
 def make_pull_request(
     number=1,
     author="janesmith",
-    created_at=datetime(2026, 3, 2, 10, 0, 0, tzinfo=timezone.utc),
-    merged_at=datetime(2026, 3, 3, 14, 0, 0, tzinfo=timezone.utc),
+    created_at=datetime(2026, 3, 2, 10, 0, 0, tzinfo=UTC),
+    merged_at=datetime(2026, 3, 3, 14, 0, 0, tzinfo=UTC),
     commit_messages=None,
 ):
     return PullRequest(

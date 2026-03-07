@@ -1,6 +1,6 @@
 """Tests for sprint_metrics.clients.github_client — Step 4 TDD."""
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, PropertyMock
+from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
 import pytest
 from github import GithubException
@@ -13,9 +13,9 @@ def _make_mock_pr(
     number=1,
     title="Add feature",
     user_login="janesmith",
-    created_at=datetime(2026, 3, 1, 10, 0, 0, tzinfo=timezone.utc),
-    merged_at=datetime(2026, 3, 2, 14, 0, 0, tzinfo=timezone.utc),
-    closed_at=datetime(2026, 3, 2, 14, 0, 0, tzinfo=timezone.utc),
+    created_at=datetime(2026, 3, 1, 10, 0, 0, tzinfo=UTC),
+    merged_at=datetime(2026, 3, 2, 14, 0, 0, tzinfo=UTC),
+    closed_at=datetime(2026, 3, 2, 14, 0, 0, tzinfo=UTC),
     updated_at=None,
     commit_messages=None,
 ):
@@ -56,8 +56,8 @@ class TestGitHubClient:
         client = self._make_client(mock_gh)
         prs = client.get_pull_requests(
             repo="myorg/repo1",
-            start_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-            end_date=datetime(2026, 3, 7, tzinfo=timezone.utc),
+            start_date=datetime(2026, 3, 1, tzinfo=UTC),
+            end_date=datetime(2026, 3, 7, tzinfo=UTC),
         )
 
         assert len(prs) == 1
@@ -77,8 +77,8 @@ class TestGitHubClient:
         client = self._make_client(mock_gh)
         prs = client.get_pull_requests(
             repo="myorg/repo1",
-            start_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-            end_date=datetime(2026, 3, 7, tzinfo=timezone.utc),
+            start_date=datetime(2026, 3, 1, tzinfo=UTC),
+            end_date=datetime(2026, 3, 7, tzinfo=UTC),
         )
 
         assert prs[0].commit_messages == ["AB#100 first", "AB#200 second"]
@@ -92,30 +92,30 @@ class TestGitHubClient:
         # Merged during sprint — included
         merged_in_sprint = _make_mock_pr(
             number=1,
-            created_at=datetime(2026, 3, 2, tzinfo=timezone.utc),
-            merged_at=datetime(2026, 3, 3, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 2, tzinfo=UTC),
+            merged_at=datetime(2026, 3, 3, tzinfo=UTC),
         )
         # Merged before sprint — excluded
         merged_before = _make_mock_pr(
             number=2,
-            created_at=datetime(2026, 2, 15, tzinfo=timezone.utc),
-            merged_at=datetime(2026, 2, 16, tzinfo=timezone.utc),
-            updated_at=datetime(2026, 3, 5, tzinfo=timezone.utc),  # updated during sprint (e.g. comment)
+            created_at=datetime(2026, 2, 15, tzinfo=UTC),
+            merged_at=datetime(2026, 2, 16, tzinfo=UTC),
+            updated_at=datetime(2026, 3, 5, tzinfo=UTC),  # updated during sprint (e.g. comment)
         )
         # Created during sprint but not merged — excluded
         unmerged = _make_mock_pr(
             number=3,
-            created_at=datetime(2026, 3, 2, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 2, tzinfo=UTC),
             merged_at=None,
             closed_at=None,
-            updated_at=datetime(2026, 3, 4, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 3, 4, tzinfo=UTC),
         )
         # Merged after sprint — excluded
         merged_after = _make_mock_pr(
             number=4,
-            created_at=datetime(2026, 3, 5, tzinfo=timezone.utc),
-            merged_at=datetime(2026, 3, 10, tzinfo=timezone.utc),
-            updated_at=datetime(2026, 3, 10, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 5, tzinfo=UTC),
+            merged_at=datetime(2026, 3, 10, tzinfo=UTC),
+            updated_at=datetime(2026, 3, 10, tzinfo=UTC),
         )
         mock_repo.get_pulls.return_value = [
             merged_after, unmerged, merged_in_sprint, merged_before,
@@ -124,8 +124,8 @@ class TestGitHubClient:
         client = self._make_client(mock_gh)
         prs = client.get_pull_requests(
             repo="myorg/repo1",
-            start_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-            end_date=datetime(2026, 3, 7, tzinfo=timezone.utc),
+            start_date=datetime(2026, 3, 1, tzinfo=UTC),
+            end_date=datetime(2026, 3, 7, tzinfo=UTC),
         )
 
         assert len(prs) == 1
@@ -139,16 +139,16 @@ class TestGitHubClient:
 
         old_pr_merged_now = _make_mock_pr(
             number=42,
-            created_at=datetime(2026, 1, 10, tzinfo=timezone.utc),
-            merged_at=datetime(2026, 3, 4, tzinfo=timezone.utc),
+            created_at=datetime(2026, 1, 10, tzinfo=UTC),
+            merged_at=datetime(2026, 3, 4, tzinfo=UTC),
         )
         mock_repo.get_pulls.return_value = [old_pr_merged_now]
 
         client = self._make_client(mock_gh)
         prs = client.get_pull_requests(
             repo="myorg/repo1",
-            start_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-            end_date=datetime(2026, 3, 7, tzinfo=timezone.utc),
+            start_date=datetime(2026, 3, 1, tzinfo=UTC),
+            end_date=datetime(2026, 3, 7, tzinfo=UTC),
         )
 
         assert len(prs) == 1
@@ -161,14 +161,14 @@ class TestGitHubClient:
         mock_gh.get_repo.return_value = mock_repo
         mock_repo.get_pulls.return_value = [
             _make_mock_pr(merged_at=None, closed_at=None,
-                          updated_at=datetime(2026, 3, 3, tzinfo=timezone.utc))
+                          updated_at=datetime(2026, 3, 3, tzinfo=UTC))
         ]
 
         client = self._make_client(mock_gh)
         prs = client.get_pull_requests(
             repo="myorg/repo1",
-            start_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-            end_date=datetime(2026, 3, 7, tzinfo=timezone.utc),
+            start_date=datetime(2026, 3, 1, tzinfo=UTC),
+            end_date=datetime(2026, 3, 7, tzinfo=UTC),
         )
 
         assert len(prs) == 0
@@ -182,8 +182,8 @@ class TestGitHubClient:
         client = self._make_client(mock_gh)
         prs = client.get_pull_requests(
             repo="myorg/repo1",
-            start_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-            end_date=datetime(2026, 3, 7, tzinfo=timezone.utc),
+            start_date=datetime(2026, 3, 1, tzinfo=UTC),
+            end_date=datetime(2026, 3, 7, tzinfo=UTC),
         )
 
         assert prs == []
@@ -199,8 +199,8 @@ class TestGitHubClient:
         client = self._make_client(mock_gh)
         prs = client.get_pull_requests(
             repo="myorg/repo1",
-            start_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-            end_date=datetime(2026, 3, 7, tzinfo=timezone.utc),
+            start_date=datetime(2026, 3, 1, tzinfo=UTC),
+            end_date=datetime(2026, 3, 7, tzinfo=UTC),
             team_usernames=["janesmith", "johndoe"],
         )
 
@@ -219,8 +219,8 @@ class TestGitHubClient:
         client = self._make_client(mock_gh)
         prs = client.get_pull_requests(
             repo="myorg/repo1",
-            start_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-            end_date=datetime(2026, 3, 7, tzinfo=timezone.utc),
+            start_date=datetime(2026, 3, 1, tzinfo=UTC),
+            end_date=datetime(2026, 3, 7, tzinfo=UTC),
         )
 
         assert len(prs) == 2
@@ -234,29 +234,29 @@ class TestGitHubClient:
         # Sorted by updated desc: in-range, then old, then even-older
         in_range = _make_mock_pr(
             number=10,
-            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
-            merged_at=datetime(2026, 3, 3, tzinfo=timezone.utc),
-            updated_at=datetime(2026, 3, 3, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 1, tzinfo=UTC),
+            merged_at=datetime(2026, 3, 3, tzinfo=UTC),
+            updated_at=datetime(2026, 3, 3, tzinfo=UTC),
         )
         old_pr = _make_mock_pr(
             number=5,
-            created_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
-            merged_at=datetime(2026, 2, 2, tzinfo=timezone.utc),
-            updated_at=datetime(2026, 2, 2, tzinfo=timezone.utc),
+            created_at=datetime(2026, 2, 1, tzinfo=UTC),
+            merged_at=datetime(2026, 2, 2, tzinfo=UTC),
+            updated_at=datetime(2026, 2, 2, tzinfo=UTC),
         )
         even_older = _make_mock_pr(
             number=1,
-            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
-            merged_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
-            updated_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+            created_at=datetime(2026, 1, 1, tzinfo=UTC),
+            merged_at=datetime(2026, 1, 2, tzinfo=UTC),
+            updated_at=datetime(2026, 1, 2, tzinfo=UTC),
         )
         mock_repo.get_pulls.return_value = [in_range, old_pr, even_older]
 
         client = self._make_client(mock_gh)
         prs = client.get_pull_requests(
             repo="myorg/repo1",
-            start_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-            end_date=datetime(2026, 3, 7, tzinfo=timezone.utc),
+            start_date=datetime(2026, 3, 1, tzinfo=UTC),
+            end_date=datetime(2026, 3, 7, tzinfo=UTC),
         )
 
         assert len(prs) == 1
@@ -272,7 +272,7 @@ class TestGitHubClient:
         mock_repo.get_pulls.return_value = [
             _make_mock_pr(
                 number=1,
-                created_at=datetime(2026, 3, 2, 12, 0, 0, tzinfo=timezone.utc),
+                created_at=datetime(2026, 3, 2, 12, 0, 0, tzinfo=UTC),
             )
         ]
 
@@ -302,8 +302,8 @@ class TestGitHubClient:
         client = self._make_client(mock_gh)
         prs = client.get_pull_requests(
             repo="myorg/repo1",
-            start_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-            end_date=datetime(2026, 3, 7, tzinfo=timezone.utc),
+            start_date=datetime(2026, 3, 1, tzinfo=UTC),
+            end_date=datetime(2026, 3, 7, tzinfo=UTC),
         )
 
         assert len(prs) == 1
@@ -319,6 +319,6 @@ class TestGitHubClient:
         with pytest.raises(RuntimeError, match="Failed to access repository 'myorg/missing'"):
             client.get_pull_requests(
                 repo="myorg/missing",
-                start_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-                end_date=datetime(2026, 3, 7, tzinfo=timezone.utc),
+                start_date=datetime(2026, 3, 1, tzinfo=UTC),
+                end_date=datetime(2026, 3, 7, tzinfo=UTC),
             )

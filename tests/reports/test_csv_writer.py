@@ -112,7 +112,7 @@ class TestWriteSprintReport:
             reader = csv.DictReader(f)
             rows = list(reader)
 
-        team_row = [r for r in rows if r["member"] == "TEAM"][0]
+        team_row = next(r for r in rows if r["member"] == "TEAM")
         assert team_row["planned_points"] == "30.0"
         assert team_row["delivered_points"] == "25.0"
 
@@ -124,7 +124,7 @@ class TestWriteSprintReport:
             reader = csv.DictReader(f)
             rows = list(reader)
 
-        team_row = [r for r in rows if r["member"] == "TEAM"][0]
+        team_row = next(r for r in rows if r["member"] == "TEAM")
         assert team_row["avg_cycle_time_days"] == "3.5"
         assert team_row["avg_pr_cycle_time_hours"] == "18.0"
 
@@ -136,7 +136,7 @@ class TestWriteSprintReport:
             reader = csv.DictReader(f)
             rows = list(reader)
 
-        team_row = [r for r in rows if r["member"] == "TEAM"][0]
+        team_row = next(r for r in rows if r["member"] == "TEAM")
         assert team_row["rework_count"] == "3"
         assert team_row["rework_points"] == "8.0"
 
@@ -148,7 +148,7 @@ class TestWriteSprintReport:
             reader = csv.DictReader(f)
             rows = list(reader)
 
-        team_row = [r for r in rows if r["member"] == "TEAM"][0]
+        team_row = next(r for r in rows if r["member"] == "TEAM")
         assert team_row["strategic_points"] == "15.0"
         assert team_row["defects_points"] == "7.0"
 
@@ -178,7 +178,7 @@ class TestWriteSprintReport:
             reader = csv.DictReader(f)
             rows = list(reader)
 
-        team_row = [r for r in rows if r["member"] == "TEAM"][0]
+        team_row = next(r for r in rows if r["member"] == "TEAM")
         assert team_row["scope_added_points"] == "5.0"
         assert team_row["scope_removed_points"] == "3.0"
         assert team_row["carryover_points"] == "4.0"

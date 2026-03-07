@@ -4,11 +4,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Optional
+from enum import StrEnum
 
 
-class ScopeStatus(str, Enum):
+class ScopeStatus(StrEnum):
     COMMITTED = "committed"
     ADDED_MID_SPRINT = "added"
     REMOVED = "removed"
@@ -20,17 +19,17 @@ class WorkItem:
     id: int
     title: str
     assigned_to: str
-    story_points: Optional[float]
+    story_points: float | None
     state: str
-    category: Optional[str]
+    category: str | None
     labels: list[str]
-    activated_date: Optional[datetime]
-    closed_date: Optional[datetime]
+    activated_date: datetime | None
+    closed_date: datetime | None
     iteration_path: str
     scope_status: ScopeStatus = ScopeStatus.COMMITTED
 
     @property
-    def cycle_time_days(self) -> Optional[float]:
+    def cycle_time_days(self) -> float | None:
         if self.activated_date is None or self.closed_date is None:
             return None
         delta = self.closed_date - self.activated_date
@@ -44,14 +43,14 @@ class PullRequest:
     title: str
     author: str
     created_at: datetime
-    merged_at: Optional[datetime]
-    closed_at: Optional[datetime]
+    merged_at: datetime | None
+    closed_at: datetime | None
     repo: str
     body: str = ""
     commit_messages: list[str] = field(default_factory=list)
 
     @property
-    def cycle_time_hours(self) -> Optional[float]:
+    def cycle_time_hours(self) -> float | None:
         if self.merged_at is None:
             return None
         delta = self.merged_at - self.created_at
@@ -69,7 +68,7 @@ class PullRequest:
         if title_match:
             ids.add(int(title_match.group(1)))
         # Check for AB#ID patterns in title, body, and commit messages
-        for text in [self.title, self.body] + self.commit_messages:
+        for text in [self.title, self.body, *self.commit_messages]:
             for match in re.finditer(r"AB#(\d+)", text):
                 ids.add(int(match.group(1)))
         return ids

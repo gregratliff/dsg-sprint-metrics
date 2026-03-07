@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from azure.devops.v7_1.work_item_tracking.models import Wiql
 
@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 class AzureDevOpsClient:
-    def __init__(self, connection, project: str, category_field: str = "Custom.Category"):
-        self._wit = connection.clients.get_work_item_tracking_client()
+    def __init__(self, connection: Any, project: str, category_field: str = "Custom.Category") -> None:
+        self._wit: Any = connection.clients.get_work_item_tracking_client()
         self._project = project
         self._category_field = category_field
 
@@ -34,9 +34,9 @@ class AzureDevOpsClient:
             "System.IterationPath",
         ]
 
-    def _fetch_work_items_resilient(self, ids: list[int]) -> list:
+    def _fetch_work_items_resilient(self, ids: list[int]) -> list[Any]:
         """Fetch work items with batch-then-individual fallback for bad IDs."""
-        raw_items = []
+        raw_items: list[Any] = []
         for i in range(0, len(ids), BATCH_SIZE):
             batch = ids[i : i + BATCH_SIZE]
             try:
@@ -105,8 +105,8 @@ class AzureDevOpsClient:
             return []
         return [self._to_work_item(raw) for raw in self._fetch_work_items_resilient(ids)]
 
-    def _to_work_item(self, raw) -> WorkItem:
-        f = raw.fields
+    def _to_work_item(self, raw: Any) -> WorkItem:
+        f: dict[str, Any] = raw.fields
         assigned = f.get("System.AssignedTo")
         if isinstance(assigned, dict):
             assigned_to = assigned.get("uniqueName", "")
@@ -115,7 +115,7 @@ class AzureDevOpsClient:
         else:
             assigned_to = ""
 
-        tags_str = f.get("System.Tags", "") or ""
+        tags_str: str = f.get("System.Tags", "") or ""
         labels = [t.strip() for t in tags_str.split(";") if t.strip()]
 
         return WorkItem(
@@ -132,10 +132,10 @@ class AzureDevOpsClient:
         )
 
 
-def _parse_date(value: Optional[str]) -> Optional[datetime]:
+def _parse_date(value: str | datetime | None) -> datetime | None:
     if not value:
         return None
     if isinstance(value, datetime):
-        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
     dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
     return dt

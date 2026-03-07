@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import Any
 
 import yaml
 
@@ -52,20 +52,20 @@ class Config:
     team_members: list[TeamMember]
     categories: list[str]
 
-    def get_member_by_github(self, username: str) -> Optional[TeamMember]:
+    def get_member_by_github(self, username: str) -> TeamMember | None:
         for m in self.team_members:
             if m.github_username == username:
                 return m
         return None
 
-    def get_member_by_ado(self, identity: str) -> Optional[TeamMember]:
+    def get_member_by_ado(self, identity: str) -> TeamMember | None:
         for m in self.team_members:
             if m.ado_identity == identity:
                 return m
         return None
 
 
-def _require(data: dict, key: str, context: str = "") -> object:
+def _require(data: dict[str, Any], key: str, context: str = "") -> Any:
     if key not in data:
         loc = f" in {context}" if context else ""
         raise ConfigError(f"Missing required field '{key}'{loc}")
@@ -80,7 +80,7 @@ def load_config(path: str) -> Config:
         raise ConfigError("Config file must be a YAML mapping")
 
     # Azure DevOps
-    ado_raw = _require(raw, "azure_devops")
+    ado_raw: dict[str, Any] = _require(raw, "azure_devops")
     ado = AzureDevOpsConfig(
         organization=_require(ado_raw, "organization", "azure_devops"),
         project=_require(ado_raw, "project", "azure_devops"),
@@ -90,7 +90,7 @@ def load_config(path: str) -> Config:
     )
 
     # GitHub
-    gh_raw = _require(raw, "github")
+    gh_raw: dict[str, Any] = _require(raw, "github")
     gh = GitHubConfig(
         org=_require(gh_raw, "org", "github"),
         repos=_require(gh_raw, "repos", "github"),
@@ -99,7 +99,7 @@ def load_config(path: str) -> Config:
     )
 
     # Sprint
-    sprint_raw = _require(raw, "sprint")
+    sprint_raw: dict[str, Any] = _require(raw, "sprint")
     sprint = SprintConfig(
         name=_require(sprint_raw, "name", "sprint"),
         start_date=datetime.fromisoformat(
@@ -112,7 +112,7 @@ def load_config(path: str) -> Config:
     )
 
     # Team members
-    members_raw = _require(raw, "team_members")
+    members_raw: list[dict[str, Any]] = _require(raw, "team_members")
     members = [
         TeamMember(
             name=_require(m, "name", "team_members"),
@@ -123,7 +123,7 @@ def load_config(path: str) -> Config:
     ]
 
     # Categories
-    categories = _require(raw, "categories")
+    categories: list[str] = _require(raw, "categories")
 
     return Config(
         azure_devops=ado,

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from statistics import median
+from typing import Any
 
 from sprint_metrics.models import ScopeStatus, WorkItem
 
@@ -10,7 +11,7 @@ from sprint_metrics.models import ScopeStatus, WorkItem
 _CYCLE_TIME_STATUSES = {ScopeStatus.COMMITTED, ScopeStatus.ADDED_MID_SPRINT}
 
 
-def calculate_cycle_times(work_items: list[WorkItem]) -> dict:
+def calculate_cycle_times(work_items: list[WorkItem]) -> dict[str, Any]:
     per_person: dict[str, list[float]] = defaultdict(list)
     all_times: list[float] = []
 
@@ -23,7 +24,7 @@ def calculate_cycle_times(work_items: list[WorkItem]) -> dict:
         all_times.append(ct)
         per_person[wi.assigned_to].append(ct)
 
-    individual = {}
+    individual: dict[str, dict[str, float | int]] = {}
     for person, times in per_person.items():
         individual[person] = {
             "average_days": sum(times) / len(times),

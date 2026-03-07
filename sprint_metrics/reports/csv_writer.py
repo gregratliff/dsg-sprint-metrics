@@ -2,20 +2,21 @@
 from __future__ import annotations
 
 import csv
+from typing import Any
 
 
-def write_sprint_report(metrics: dict, output_path: str) -> None:
-    sprint_name = metrics["sprint_name"]
-    velocity = metrics["velocity"]
-    cycle_time = metrics["cycle_time"]
-    pr_cycle_time = metrics["pr_cycle_time"]
-    rework = metrics["rework"]
-    categories = metrics["categories"]
+def write_sprint_report(metrics: dict[str, Any], output_path: str) -> None:
+    sprint_name: str = metrics["sprint_name"]
+    velocity: dict[str, Any] = metrics["velocity"]
+    cycle_time: dict[str, Any] = metrics["cycle_time"]
+    pr_cycle_time: dict[str, Any] = metrics["pr_cycle_time"]
+    rework: dict[str, Any] = metrics["rework"]
+    categories: dict[str, Any] = metrics["categories"]
 
     # Determine category columns from team data (exclude "other" if empty)
     cat_names = [c for c in categories["team"] if c != "other" or categories["team"]["other"]["count"] > 0]
 
-    member_info = metrics.get("member_info", {})
+    member_info: dict[str, dict[str, str]] = metrics.get("member_info", {})
 
     fieldnames = [
         "sprint",
@@ -45,14 +46,14 @@ def write_sprint_report(metrics: dict, output_path: str) -> None:
         fieldnames.append(f"{cat}_count")
 
     # Collect all individual members
-    members = set()
+    members: set[str] = set()
     members.update(velocity["individual"].keys())
     members.update(cycle_time["individual"].keys())
     members.update(pr_cycle_time["individual"].keys())
     members.update(rework["individual"].keys())
     members.update(categories["individual"].keys())
 
-    rows = []
+    rows: list[dict[str, Any]] = []
 
     # Team row
     rows.append(_build_row(
@@ -87,14 +88,14 @@ def _build_row(
     member: str,
     ado_identity: str,
     github_username: str,
-    vel: dict,
-    ct: dict,
-    pr_ct: dict,
-    rw: dict,
-    cats: dict,
+    vel: dict[str, Any],
+    ct: dict[str, Any],
+    pr_ct: dict[str, Any],
+    rw: dict[str, Any],
+    cats: dict[str, Any],
     cat_names: list[str],
-) -> dict:
-    row = {
+) -> dict[str, Any]:
+    row: dict[str, Any] = {
         "sprint": sprint,
         "member": member,
         "ado_identity": ado_identity,
@@ -118,7 +119,7 @@ def _build_row(
         "rework_rate": rw.get("rework_rate", ""),
     }
     for cat in cat_names:
-        cat_data = cats.get(cat, {})
+        cat_data: dict[str, Any] = cats.get(cat, {})
         row[f"{cat}_points"] = cat_data.get("points", "")
         row[f"{cat}_count"] = cat_data.get("count", "")
     return row

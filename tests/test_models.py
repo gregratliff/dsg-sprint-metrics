@@ -1,8 +1,9 @@
 """Tests for sprint_metrics.models — Step 1 TDD."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 import pytest
 
-from sprint_metrics.models import WorkItem, PullRequest, SprintInfo
+from sprint_metrics.models import PullRequest, SprintInfo, WorkItem
 
 
 class TestWorkItem:
@@ -15,8 +16,8 @@ class TestWorkItem:
             state="Closed",
             category="strategic",
             labels=["rework", "missed-ac"],
-            activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-            closed_date=datetime(2026, 3, 4, tzinfo=timezone.utc),
+            activated_date=datetime(2026, 3, 1, tzinfo=UTC),
+            closed_date=datetime(2026, 3, 4, tzinfo=UTC),
             iteration_path="MyProject\\Sprint 10",
         )
         assert wi.id == 123
@@ -37,8 +38,8 @@ class TestWorkItem:
             state="Closed",
             category="strategic",
             labels=[],
-            activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-            closed_date=datetime(2026, 3, 4, 12, 0, 0, tzinfo=timezone.utc),
+            activated_date=datetime(2026, 3, 1, tzinfo=UTC),
+            closed_date=datetime(2026, 3, 4, 12, 0, 0, tzinfo=UTC),
             iteration_path="P\\S1",
         )
         assert wi.cycle_time_days == pytest.approx(3.5)
@@ -52,7 +53,7 @@ class TestWorkItem:
             state="Active",
             category="defects",
             labels=[],
-            activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            activated_date=datetime(2026, 3, 1, tzinfo=UTC),
             closed_date=None,
             iteration_path="P\\S1",
         )
@@ -97,9 +98,9 @@ class TestPullRequest:
             number=42,
             title="Add login feature",
             author="janesmith",
-            created_at=datetime(2026, 3, 1, 10, 0, 0, tzinfo=timezone.utc),
-            merged_at=datetime(2026, 3, 2, 14, 0, 0, tzinfo=timezone.utc),
-            closed_at=datetime(2026, 3, 2, 14, 0, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 1, 10, 0, 0, tzinfo=UTC),
+            merged_at=datetime(2026, 3, 2, 14, 0, 0, tzinfo=UTC),
+            closed_at=datetime(2026, 3, 2, 14, 0, 0, tzinfo=UTC),
             repo="myorg/repo1",
             commit_messages=["AB#123 implement login", "fix tests AB#456"],
         )
@@ -113,9 +114,9 @@ class TestPullRequest:
             number=10,
             title="T",
             author="a",
-            created_at=datetime(2026, 3, 1, 10, 0, 0, tzinfo=timezone.utc),
-            merged_at=datetime(2026, 3, 2, 14, 0, 0, tzinfo=timezone.utc),
-            closed_at=datetime(2026, 3, 2, 14, 0, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 1, 10, 0, 0, tzinfo=UTC),
+            merged_at=datetime(2026, 3, 2, 14, 0, 0, tzinfo=UTC),
+            closed_at=datetime(2026, 3, 2, 14, 0, 0, tzinfo=UTC),
             repo="o/r",
             commit_messages=[],
         )
@@ -127,7 +128,7 @@ class TestPullRequest:
             number=11,
             title="T",
             author="a",
-            created_at=datetime(2026, 3, 1, 10, 0, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 1, 10, 0, 0, tzinfo=UTC),
             merged_at=None,
             closed_at=None,
             repo="o/r",
@@ -141,7 +142,7 @@ class TestPullRequest:
             number=12,
             title="T",
             author="a",
-            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 1, tzinfo=UTC),
             merged_at=None,
             closed_at=None,
             repo="o/r",
@@ -161,7 +162,7 @@ class TestPullRequest:
             number=14,
             title="1422900 RouteDetails: Stop Status Code Badge",
             author="a",
-            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 1, tzinfo=UTC),
             merged_at=None,
             closed_at=None,
             repo="o/r",
@@ -174,7 +175,7 @@ class TestPullRequest:
             number=15,
             title="Fix bug AB#99999 in routing",
             author="a",
-            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 1, tzinfo=UTC),
             merged_at=None,
             closed_at=None,
             repo="o/r",
@@ -187,7 +188,7 @@ class TestPullRequest:
             number=16,
             title="Enable drowsiness detection",
             author="a",
-            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 1, tzinfo=UTC),
             merged_at=None,
             closed_at=None,
             repo="o/r",
@@ -201,7 +202,7 @@ class TestPullRequest:
             number=17,
             title="1430241 driver scorecard fix",
             author="a",
-            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 1, tzinfo=UTC),
             merged_at=None,
             closed_at=None,
             repo="o/r",
@@ -216,7 +217,7 @@ class TestPullRequest:
             number=13,
             title="T",
             author="a",
-            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 1, tzinfo=UTC),
             merged_at=None,
             closed_at=None,
             repo="o/r",
@@ -231,7 +232,7 @@ class TestPullRequest:
             number=18,
             title="1234 short number title",
             author="a",
-            created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 1, tzinfo=UTC),
             merged_at=None,
             closed_at=None,
             repo="o/r",
@@ -243,8 +244,8 @@ class TestSprintInfo:
     def test_creation(self):
         si = SprintInfo(
             name="Sprint 23.1",
-            start_date=datetime(2026, 2, 23, tzinfo=timezone.utc),
-            end_date=datetime(2026, 3, 6, tzinfo=timezone.utc),
+            start_date=datetime(2026, 2, 23, tzinfo=UTC),
+            end_date=datetime(2026, 3, 6, tzinfo=UTC),
             team="Team Alpha",
         )
         assert si.name == "Sprint 23.1"
@@ -253,8 +254,8 @@ class TestSprintInfo:
     def test_duration_days(self):
         si = SprintInfo(
             name="S1",
-            start_date=datetime(2026, 2, 23, tzinfo=timezone.utc),
-            end_date=datetime(2026, 3, 6, tzinfo=timezone.utc),
+            start_date=datetime(2026, 2, 23, tzinfo=UTC),
+            end_date=datetime(2026, 3, 6, tzinfo=UTC),
             team="T",
         )
         assert si.duration_days == 11

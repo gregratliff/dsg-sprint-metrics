@@ -69,3 +69,9 @@ All velocity stats are computed at both team and individual level using shared a
 To distinguish REMOVED from CARRIED_OVER, the pipeline fetches the **current state** of items that left the sprint (via `get_work_items_by_ids`). If the item's current `iteration_path` is a different sprint (not a parent/backlog path), it's CARRIED_OVER. If it's on the backlog, deleted, or not found, it stays REMOVED.
 
 The heuristic: if `sprint_iteration_path` starts with `current_iteration_path`, the item was moved to a parent (backlog) → REMOVED. Otherwise, if the paths differ → CARRIED_OVER.
+
+## Type Safety
+
+- All metric functions return `dict[str, Any]` — the consistent `{"team": {...}, "individual": {...}}` structure is documented but not enforced by types since the nested shapes vary per metric.
+- Internal accumulators use precise types (e.g., `dict[str, float]` in velocity).
+- `mypy --strict` passes on all metric modules.

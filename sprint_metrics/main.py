@@ -6,25 +6,26 @@ import logging
 import os
 import re
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
-logger = logging.getLogger(__name__)
-
-from sprint_metrics.config import load_config, Config
 from sprint_metrics.clients.azure_devops_client import AzureDevOpsClient
 from sprint_metrics.clients.github_client import GitHubClient
-from sprint_metrics.metrics.velocity import calculate_velocity
+from sprint_metrics.config import Config, TeamMember, load_config
+from sprint_metrics.metrics.category_breakdown import calculate_category_breakdown
 from sprint_metrics.metrics.cycle_time import calculate_cycle_times
 from sprint_metrics.metrics.pr_cycle_time import calculate_pr_cycle_times
 from sprint_metrics.metrics.rework import calculate_rework
-from sprint_metrics.metrics.category_breakdown import calculate_category_breakdown
+from sprint_metrics.metrics.velocity import calculate_velocity
 from sprint_metrics.models import PullRequest, ScopeStatus, WorkItem
 from sprint_metrics.reports.csv_writer import write_sprint_report
 
+logger = logging.getLogger(__name__)
+
 
 def normalize_metrics_identity(
-    metrics: dict, team_members: list,
-) -> dict:
+    metrics: dict[str, Any], team_members: list[TeamMember],
+) -> dict[str, Any]:
     """Remap metric dict keys from ADO/GitHub identities to display names.
 
     ADO-keyed metrics (velocity, cycle_time, rework, categories) use ado_identity.
@@ -37,7 +38,7 @@ def normalize_metrics_identity(
     ado_keyed = ["velocity", "cycle_time", "rework", "categories"]
     gh_keyed = ["pr_cycle_time"]
 
-    result = dict(metrics)
+    result: dict[str, Any] = dict(metrics)
 
     for key in ado_keyed:
         if key in result and "individual" in result[key]:
@@ -195,7 +196,7 @@ def _create_ado_client(cfg: Config) -> AzureDevOpsClient:
 def _create_github_client(cfg: Config) -> GitHubClient:
     from github import Auth, Github
 
-    pat = os.environ.get(cfg.github.pat_env_var)
+    pat = os.environ.get(cfg.github.pat_env_var, "")
     return GitHubClient(github=Github(auth=Auth.Token(pat)))
 
 
@@ -237,10 +238,10 @@ def run(
 
     # Ensure dates are timezone-aware for ASOF queries
     if planning_date.tzinfo is None:
-        planning_date = planning_date.replace(tzinfo=timezone.utc)
+        planning_date = planning_date.replace(tzinfo=UTC)
     end_date = cfg.sprint.end_date
     if end_date.tzinfo is None:
-        end_date = end_date.replace(tzinfo=timezone.utc)
+        end_date = end_date.replace(tzinfo=UTC)
 
     # Fetch planning snapshot (what was in sprint after planning settled)
     logger.info("Fetching planning snapshot (as of %s)...", planning_date.date())
@@ -248,7 +249,7 @@ def run(
     logger.info("Planning snapshot: %d work items", len(planned_items))
 
     # Fetch end-of-sprint snapshot
-    now = datetime.now(tz=timezone.utc)
+    now = datetime.now(tz=UTC)
     if end_date <= now:
         logger.info("Fetching end-of-sprint snapshot (as of %s)...", end_date.date())
         end_items = ado_client.get_sprint_work_items_asof(iteration_path, end_date)
@@ -301,7 +302,7 @@ def run(
                 wi.id, wi.title, wi.story_points or 0,
             )
 
-    all_prs = []
+    all_prs: list[PullRequest] = []
     team_usernames = [m.github_username for m in cfg.team_members]
     for repo_name in cfg.github.repos:
         repo_full = f"{cfg.github.org}/{repo_name}"
@@ -364,7 +365,7 @@ def run(
             work_items.extend(extra_items)
 
     # Calculate metrics
-    metrics = {
+    metrics: dict[str, Any] = {
         "sprint_name": cfg.sprint.name,
         "velocity": calculate_velocity(work_items),
         "cycle_time": calculate_cycle_times(work_items),
@@ -388,7 +389,7 @@ def run(
     logger.info("Report written to %s", output_path)
 
 
-def main():
+def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(levelname)s: %(message)s",

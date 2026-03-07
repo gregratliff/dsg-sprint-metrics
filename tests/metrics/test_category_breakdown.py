@@ -1,5 +1,4 @@
 """Tests for sprint_metrics.metrics.category_breakdown — Step 9 TDD."""
-import pytest
 
 from sprint_metrics.metrics.category_breakdown import calculate_category_breakdown
 from tests.conftest import make_work_item

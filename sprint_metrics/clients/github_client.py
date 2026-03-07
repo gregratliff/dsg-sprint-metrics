@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from github import GithubException
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class GitHubClient:
-    def __init__(self, github):
+    def __init__(self, github: Any) -> None:
         self._gh = github
 
     def get_pull_requests(
@@ -21,7 +21,7 @@ class GitHubClient:
         repo: str,
         start_date: datetime,
         end_date: datetime,
-        team_usernames: Optional[list[str]] = None,
+        team_usernames: list[str] | None = None,
     ) -> list[PullRequest]:
         try:
             gh_repo = self._gh.get_repo(repo)
@@ -32,13 +32,13 @@ class GitHubClient:
             ) from exc
         # Ensure dates are timezone-aware for comparison with GitHub's UTC datetimes
         if start_date.tzinfo is None:
-            start_date = start_date.replace(tzinfo=timezone.utc)
+            start_date = start_date.replace(tzinfo=UTC)
         if end_date.tzinfo is None:
-            end_date = end_date.replace(tzinfo=timezone.utc)
+            end_date = end_date.replace(tzinfo=UTC)
 
         raw_prs = gh_repo.get_pulls(state="closed", sort="updated", direction="desc")
 
-        results = []
+        results: list[PullRequest] = []
         scanned = 0
         for pr in raw_prs:
             scanned += 1

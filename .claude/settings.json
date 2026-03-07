@@ -1,0 +1,30 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /home/user/ClaudePlay && python -m pytest tests/ --tb=short -q 2>&1 | tail -20"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /home/user/ClaudePlay && python -m mypy sprint_metrics/ --strict 2>&1 | tail -10"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd /home/user/ClaudePlay && python -m ruff check sprint_metrics/ tests/ 2>&1 | tail -10"
+          }
+        ]
+      }
+    ]
+  }
+}

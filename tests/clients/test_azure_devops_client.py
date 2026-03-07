@@ -1,6 +1,6 @@
 """Tests for sprint_metrics.clients.azure_devops_client — Step 3 TDD."""
-from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -102,7 +102,7 @@ class TestAzureDevOpsClient:
         assert wi.state == "Active"
         assert wi.category == "defects"
         assert wi.labels == ["rework", "missed-ac"]
-        assert wi.activated_date == datetime(2026, 3, 2, 10, 0, 0, tzinfo=timezone.utc)
+        assert wi.activated_date == datetime(2026, 3, 2, 10, 0, 0, tzinfo=UTC)
         assert wi.closed_date is None
 
     def test_empty_wiql_result(self):
@@ -249,7 +249,7 @@ class TestAzureDevOpsClient:
         mock_wit.query_by_wiql.return_value = wiql_result
 
         client = self._make_client(mock_wit)
-        asof_date = datetime(2026, 3, 8, tzinfo=timezone.utc)
+        asof_date = datetime(2026, 3, 8, tzinfo=UTC)
         client.get_sprint_work_items_asof("MyProject\\Sprint 10", asof_date)
 
         call_args = mock_wit.query_by_wiql.call_args
@@ -273,7 +273,7 @@ class TestAzureDevOpsClient:
         client = self._make_client(mock_wit)
         items = client.get_sprint_work_items_asof(
             "MyProject\\Sprint 10",
-            datetime(2026, 3, 8, tzinfo=timezone.utc),
+            datetime(2026, 3, 8, tzinfo=UTC),
         )
 
         assert len(items) == 1
@@ -289,7 +289,7 @@ class TestAzureDevOpsClient:
         with pytest.raises(RuntimeError, match="Failed to query sprint work items"):
             client.get_sprint_work_items_asof(
                 "MyProject\\Sprint 10",
-                datetime(2026, 3, 8, tzinfo=timezone.utc),
+                datetime(2026, 3, 8, tzinfo=UTC),
             )
 
     def test_get_sprint_work_items_asof_skips_deleted_items(self):
@@ -317,7 +317,7 @@ class TestAzureDevOpsClient:
         client = self._make_client(mock_wit)
         items = client.get_sprint_work_items_asof(
             "MyProject\\Sprint 10",
-            datetime(2026, 3, 8, tzinfo=timezone.utc),
+            datetime(2026, 3, 8, tzinfo=UTC),
         )
 
         assert len(items) == 1

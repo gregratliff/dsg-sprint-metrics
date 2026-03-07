@@ -1,0 +1,44 @@
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["azure.devops.*", "msrest.*", "azure.devops.credentials.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["github.*"]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+  "E", "F", "W",   # pycodestyle + pyflakes
+  "I",              # isort (import sorting)
+  "UP",             # pyupgrade (modern syntax)
+  "B",              # bugbear (common bugs)
+  "S",              # bandit security checks
+  "SIM",            # simplify
+  "C4",             # comprehension improvements
+  "A",              # avoid shadowing builtins
+  "RUF",            # ruff-specific
+  "PT",             # pytest style
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S108"]  # assert and /tmp paths OK in tests
+"sprint_metrics/clients/azure_devops_client.py" = ["S608"]  # WIQL is ADO's query language, not SQL
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=sprint_metrics --cov-report=term-missing --cov-fail-under=80 --tb=short"
+
+[tool.coverage.run]
+source = ["sprint_metrics"]
+omit = ["tests/*"]

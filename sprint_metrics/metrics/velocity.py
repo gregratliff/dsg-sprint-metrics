@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import Any
 
 from sprint_metrics.models import ScopeStatus, WorkItem
 
@@ -56,13 +57,11 @@ def _accumulate(acc: dict[str, float], wi: WorkItem, pts: float) -> None:
     elif wi.scope_status == ScopeStatus.REMOVED:
         acc["scope_removed_points"] += pts
 
-    if wi.scope_status == ScopeStatus.CARRIED_OVER:
-        acc["carryover_points"] += pts
-    elif not is_closed and wi.scope_status in _CARRYOVER_STATUSES:
+    if wi.scope_status == ScopeStatus.CARRIED_OVER or (not is_closed and wi.scope_status in _CARRYOVER_STATUSES):
         acc["carryover_points"] += pts
 
 
-def calculate_velocity(work_items: list[WorkItem]) -> dict:
+def calculate_velocity(work_items: list[WorkItem]) -> dict[str, Any]:
     team_acc = _empty_accum()
     per_person: dict[str, dict[str, float]] = defaultdict(_empty_accum)
 

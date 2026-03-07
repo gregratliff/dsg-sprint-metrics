@@ -1,12 +1,8 @@
 """Tests for sprint_metrics.config — Step 2 TDD."""
-import os
-import tempfile
-from pathlib import Path
 
 import pytest
 
-from sprint_metrics.config import load_config, ConfigError
-
+from sprint_metrics.config import ConfigError, load_config
 
 VALID_YAML = """\
 azure_devops:

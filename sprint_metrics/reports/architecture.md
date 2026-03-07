@@ -39,3 +39,8 @@ rework_count, rework_points, rework_rate,
 - The `member_info` dict (added by `normalize_metrics_identity()`) provides the identity mapping; if absent, identity columns default to empty
 - Sprint names with path separators (`\`, `/`) are sanitized in `main.py` before constructing the output filename
 - Report write failures (bad path, permissions) are caught in `main.py` and re-raised as `RuntimeError` with the output path in the message
+
+## Type Safety
+
+- All function parameters use `dict[str, Any]` for metric inputs — the structure is documented in metrics `architecture.md` but not enforced by types.
+- `mypy --strict` passes on all report modules.

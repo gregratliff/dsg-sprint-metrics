@@ -2,17 +2,20 @@
 import csv
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from sprint_metrics.main import (
-    run, parse_args, filter_excluded_prs, filter_work_items_to_team,
-    normalize_metrics_identity, classify_sprint_scope,
+    classify_sprint_scope,
+    filter_excluded_prs,
+    filter_work_items_to_team,
+    normalize_metrics_identity,
+    parse_args,
+    run,
 )
-from sprint_metrics.models import WorkItem, PullRequest, ScopeStatus
-
+from sprint_metrics.models import PullRequest, ScopeStatus, WorkItem
 
 VALID_YAML = """\
 azure_devops:
@@ -52,15 +55,15 @@ def _sample_work_items():
             id=1, title="Feature A", assigned_to="jane.smith@company.com",
             story_points=5.0, state="Closed", category="strategic",
             labels=[], iteration_path="myproject\\Sprint 10",
-            activated_date=datetime(2026, 3, 2, tzinfo=timezone.utc),
-            closed_date=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            activated_date=datetime(2026, 3, 2, tzinfo=UTC),
+            closed_date=datetime(2026, 3, 5, tzinfo=UTC),
         ),
         WorkItem(
             id=2, title="Bug B", assigned_to="jane.smith@company.com",
             story_points=3.0, state="Closed", category="defects",
             labels=["rework"], iteration_path="myproject\\Sprint 10",
-            activated_date=datetime(2026, 3, 3, tzinfo=timezone.utc),
-            closed_date=datetime(2026, 3, 6, tzinfo=timezone.utc),
+            activated_date=datetime(2026, 3, 3, tzinfo=UTC),
+            closed_date=datetime(2026, 3, 6, tzinfo=UTC),
         ),
     ]
 
@@ -69,9 +72,9 @@ def _sample_prs():
     return [
         PullRequest(
             id=100, number=1, title="PR 1", author="janesmith",
-            created_at=datetime(2026, 3, 2, 10, 0, 0, tzinfo=timezone.utc),
-            merged_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=timezone.utc),
-            closed_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 2, 10, 0, 0, tzinfo=UTC),
+            merged_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=UTC),
+            closed_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=UTC),
             repo="myorg/repo1", commit_messages=["AB#1 feature A"],
         ),
     ]
@@ -82,13 +85,13 @@ class TestFilterExcludedPrs:
         patterns = ["^(production|pentest|master) deploy", "^develop -> master"]
         prs = [
             PullRequest(id=1, number=1, title="production deploy 2026-02-26",
-                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=UTC),
                         merged_at=None, closed_at=None, repo="r"),
             PullRequest(id=2, number=2, title="develop -> master 2026-02-26",
-                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=UTC),
                         merged_at=None, closed_at=None, repo="r"),
             PullRequest(id=3, number=3, title="1422900 RouteDetails: Stop Status Code Badge",
-                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=UTC),
                         merged_at=None, closed_at=None, repo="r"),
         ]
         result = filter_excluded_prs(prs, patterns)
@@ -98,7 +101,7 @@ class TestFilterExcludedPrs:
     def test_empty_patterns_keeps_all(self):
         prs = [
             PullRequest(id=1, number=1, title="production deploy",
-                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=UTC),
                         merged_at=None, closed_at=None, repo="r"),
         ]
         result = filter_excluded_prs(prs, [])
@@ -108,7 +111,7 @@ class TestFilterExcludedPrs:
         patterns = ["^production deploy"]
         prs = [
             PullRequest(id=1, number=1, title="Production Deploy 2026-02-26",
-                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=UTC),
                         merged_at=None, closed_at=None, repo="r"),
         ]
         result = filter_excluded_prs(prs, patterns)
@@ -119,7 +122,7 @@ class TestFilterExcludedPrs:
         patterns = ["^develop -> master"]
         prs = [
             PullRequest(id=1, number=1, title='Revert "develop -> master 2026-03-02 2316"',
-                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=UTC),
                         merged_at=None, closed_at=None, repo="r"),
         ]
         result = filter_excluded_prs(prs, patterns)
@@ -131,7 +134,7 @@ class TestFilterExcludedPrs:
         prs = [
             PullRequest(id=1, number=1,
                         title='Revert "Revert "develop -> master 2026-03-02 2316""',
-                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=UTC),
                         merged_at=None, closed_at=None, repo="r"),
         ]
         result = filter_excluded_prs(prs, patterns)
@@ -142,7 +145,7 @@ class TestFilterExcludedPrs:
         patterns = ["^develop -> master"]
         prs = [
             PullRequest(id=1, number=1, title='Revert "Fix login bug #1234"',
-                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=UTC),
                         merged_at=None, closed_at=None, repo="r"),
         ]
         result = filter_excluded_prs(prs, patterns)
@@ -153,7 +156,7 @@ class TestFilterExcludedPrs:
         patterns = ["feature/deploy"]
         prs = [
             PullRequest(id=1, number=1, title='Revert "feature/deploy hotfix"',
-                        author="a", created_at=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                        author="a", created_at=datetime(2026, 3, 1, tzinfo=UTC),
                         merged_at=None, closed_at=None, repo="r"),
         ]
         result = filter_excluded_prs(prs, patterns)
@@ -236,13 +239,13 @@ class TestFilterWorkItemsToTeam:
             WorkItem(id=1, title="A", assigned_to="jane.smith@company.com",
                      story_points=5.0, state="Closed", category="strategic",
                      labels=[], iteration_path="p\\Sprint 10",
-                     activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-                     closed_date=datetime(2026, 3, 3, tzinfo=timezone.utc)),
+                     activated_date=datetime(2026, 3, 1, tzinfo=UTC),
+                     closed_date=datetime(2026, 3, 3, tzinfo=UTC)),
             WorkItem(id=2, title="B", assigned_to="other.person@company.com",
                      story_points=3.0, state="Closed", category="defects",
                      labels=[], iteration_path="p\\Sprint 10",
-                     activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-                     closed_date=datetime(2026, 3, 3, tzinfo=timezone.utc)),
+                     activated_date=datetime(2026, 3, 1, tzinfo=UTC),
+                     closed_date=datetime(2026, 3, 3, tzinfo=UTC)),
         ]
         result = filter_work_items_to_team(items, team_identities)
         assert len(result) == 1
@@ -304,7 +307,7 @@ class TestRun:
             rows = list(reader)
 
         assert len(rows) >= 1  # at least team row
-        team_row = [r for r in rows if r["member"] == "TEAM"][0]
+        team_row = next(r for r in rows if r["member"] == "TEAM")
         assert team_row["sprint"] == "Sprint 10"
         assert float(team_row["planned_points"]) == 8.0
         assert float(team_row["delivered_points"]) == 8.0
@@ -389,10 +392,10 @@ class TestRun:
             assigned_to="other.person@company.com",
             story_points=10.0, state="Closed", category="strategic",
             labels=[], iteration_path="myproject\\Sprint 10",
-            activated_date=datetime(2026, 3, 2, tzinfo=timezone.utc),
-            closed_date=datetime(2026, 3, 5, tzinfo=timezone.utc),
+            activated_date=datetime(2026, 3, 2, tzinfo=UTC),
+            closed_date=datetime(2026, 3, 5, tzinfo=UTC),
         )
-        items = _sample_work_items() + [other_team_item]
+        items = [*_sample_work_items(), other_team_item]
 
         mock_ado = MagicMock()
         mock_ado.get_sprint_work_items.return_value = items
@@ -414,7 +417,7 @@ class TestRun:
         # other.person should NOT appear
         assert "other.person@company.com" not in members
         # team total should be 8 points (not 18)
-        team_row = [r for r in rows if r["member"] == "TEAM"][0]
+        team_row = next(r for r in rows if r["member"] == "TEAM")
         assert float(team_row["planned_points"]) == 8.0
 
     def test_deployment_prs_excluded_from_report(self, tmp_path):
@@ -433,12 +436,12 @@ class TestRun:
         deploy_pr = PullRequest(
             id=200, number=2, title="production deploy 2026-02-26-1956",
             author="janesmith",
-            created_at=datetime(2026, 3, 10, 10, 0, 0, tzinfo=timezone.utc),
-            merged_at=datetime(2026, 3, 10, 10, 5, 0, tzinfo=timezone.utc),
-            closed_at=datetime(2026, 3, 10, 10, 5, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 10, 10, 0, 0, tzinfo=UTC),
+            merged_at=datetime(2026, 3, 10, 10, 5, 0, tzinfo=UTC),
+            closed_at=datetime(2026, 3, 10, 10, 5, 0, tzinfo=UTC),
             repo="myorg/repo1", commit_messages=[],
         )
-        prs_with_deploy = _sample_prs() + [deploy_pr]
+        prs_with_deploy = [*_sample_prs(), deploy_pr]
 
         mock_ado = MagicMock()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
@@ -456,7 +459,7 @@ class TestRun:
             reader = csv.DictReader(f)
             rows = list(reader)
 
-        team_row = [r for r in rows if r["member"] == "TEAM"][0]
+        team_row = next(r for r in rows if r["member"] == "TEAM")
         # Only 1 PR should be counted (deploy PR excluded)
         assert int(team_row["pr_count"]) == 1
 
@@ -493,7 +496,7 @@ class TestRun:
         with open(report_path) as f:
             reader = csv.DictReader(f)
             rows = list(reader)
-        team_row = [r for r in rows if r["member"] == "TEAM"][0]
+        team_row = next(r for r in rows if r["member"] == "TEAM")
         assert int(team_row["pr_count"]) == 1  # Only from repo2
 
     def test_invalid_pr_work_item_ids_continue(self, tmp_path, caplog):
@@ -515,13 +518,13 @@ class TestRun:
         # PR references a non-existent work item
         bad_ref_pr = PullRequest(
             id=999, number=99, title="12345 bad ref PR", author="janesmith",
-            created_at=datetime(2026, 3, 2, 10, 0, 0, tzinfo=timezone.utc),
-            merged_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=timezone.utc),
-            closed_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 2, 10, 0, 0, tzinfo=UTC),
+            merged_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=UTC),
+            closed_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=UTC),
             repo="myorg/repo1", commit_messages=["AB#56789 also fake"],
         )
         mock_gh = MagicMock()
-        mock_gh.get_pull_requests.return_value = _sample_prs() + [bad_ref_pr]
+        mock_gh.get_pull_requests.return_value = [*_sample_prs(), bad_ref_pr]
 
         with patch("sprint_metrics.main._create_ado_client", return_value=mock_ado), \
              patch("sprint_metrics.main._create_github_client", return_value=mock_gh), \
@@ -555,13 +558,13 @@ class TestRun:
         # PR with no work item reference at all
         no_ref_pr = PullRequest(
             id=800, number=55, title="Fix flaky test", author="johndoe",
-            created_at=datetime(2026, 3, 2, 10, 0, 0, tzinfo=timezone.utc),
-            merged_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=timezone.utc),
-            closed_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 3, 2, 10, 0, 0, tzinfo=UTC),
+            merged_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=UTC),
+            closed_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=UTC),
             repo="myorg/repo1", body="", commit_messages=["fix the test"],
         )
         mock_gh = MagicMock()
-        mock_gh.get_pull_requests.return_value = _sample_prs() + [no_ref_pr]
+        mock_gh.get_pull_requests.return_value = [*_sample_prs(), no_ref_pr]
 
         with patch("sprint_metrics.main._create_ado_client", return_value=mock_ado), \
              patch("sprint_metrics.main._create_github_client", return_value=mock_gh), \

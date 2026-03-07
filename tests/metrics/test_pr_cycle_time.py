@@ -1,5 +1,5 @@
 """Tests for sprint_metrics.metrics.pr_cycle_time — Step 7 TDD."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -13,14 +13,14 @@ class TestCalculatePrCycleTimes:
             make_pull_request(
                 number=1,
                 author="jane",
-                created_at=datetime(2026, 3, 1, 10, 0, 0, tzinfo=timezone.utc),
-                merged_at=datetime(2026, 3, 2, 10, 0, 0, tzinfo=timezone.utc),
+                created_at=datetime(2026, 3, 1, 10, 0, 0, tzinfo=UTC),
+                merged_at=datetime(2026, 3, 2, 10, 0, 0, tzinfo=UTC),
             ),
             make_pull_request(
                 number=2,
                 author="jane",
-                created_at=datetime(2026, 3, 3, 8, 0, 0, tzinfo=timezone.utc),
-                merged_at=datetime(2026, 3, 3, 20, 0, 0, tzinfo=timezone.utc),
+                created_at=datetime(2026, 3, 3, 8, 0, 0, tzinfo=UTC),
+                merged_at=datetime(2026, 3, 3, 20, 0, 0, tzinfo=UTC),
             ),
         ]
         result = calculate_pr_cycle_times(prs)
@@ -33,14 +33,14 @@ class TestCalculatePrCycleTimes:
             make_pull_request(
                 number=1,
                 author="jane",
-                created_at=datetime(2026, 3, 1, 10, 0, 0, tzinfo=timezone.utc),
-                merged_at=datetime(2026, 3, 2, 10, 0, 0, tzinfo=timezone.utc),
+                created_at=datetime(2026, 3, 1, 10, 0, 0, tzinfo=UTC),
+                merged_at=datetime(2026, 3, 2, 10, 0, 0, tzinfo=UTC),
             ),
             make_pull_request(
                 number=2,
                 author="john",
-                created_at=datetime(2026, 3, 1, 8, 0, 0, tzinfo=timezone.utc),
-                merged_at=datetime(2026, 3, 1, 14, 0, 0, tzinfo=timezone.utc),
+                created_at=datetime(2026, 3, 1, 8, 0, 0, tzinfo=UTC),
+                merged_at=datetime(2026, 3, 1, 14, 0, 0, tzinfo=UTC),
             ),
         ]
         result = calculate_pr_cycle_times(prs)
@@ -50,7 +50,7 @@ class TestCalculatePrCycleTimes:
 
     def test_excludes_unmerged(self):
         prs = [
-            make_pull_request(number=1, merged_at=datetime(2026, 3, 2, 10, 0, 0, tzinfo=timezone.utc)),
+            make_pull_request(number=1, merged_at=datetime(2026, 3, 2, 10, 0, 0, tzinfo=UTC)),
             make_pull_request(number=2, merged_at=None),
         ]
         result = calculate_pr_cycle_times(prs)

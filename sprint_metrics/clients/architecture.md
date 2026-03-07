@@ -44,6 +44,13 @@ Config dates may be naive; clients normalize them to UTC-aware datetimes before 
 ### Logging
 All clients use the `logging` module (`logging.getLogger(__name__)`). `print()` is not used. This enables structured log output and distinct warning vs. info levels.
 
+## Type Safety
+
+- Client constructors accept `Any` for external SDK types (azure-devops `Connection`, PyGithub `Github`) since these libraries lack type stubs.
+- All internal types are fully annotated — `mypy --strict` passes.
+- The `_parse_date()` helper accepts `str | datetime | None` to handle both raw API strings and pre-parsed datetime objects.
+- WIQL query strings are flagged by ruff's S608 rule but suppressed via per-file ignore in `pyproject.toml` — WIQL uses controlled internal input, not user-supplied strings.
+
 ## Identity Model
 - ADO work items use `assigned_to` (email format, e.g., `jane.smith@company.com`)
 - GitHub PRs use `author` (GitHub login, e.g., `janesmith`)

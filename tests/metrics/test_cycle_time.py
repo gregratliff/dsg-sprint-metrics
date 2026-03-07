@@ -1,5 +1,5 @@
 """Tests for sprint_metrics.metrics.cycle_time — Step 6 TDD."""
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -14,14 +14,14 @@ class TestCalculateCycleTimes:
             make_work_item(
                 id_=1,
                 assigned_to="jane",
-                activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-                closed_date=datetime(2026, 3, 4, tzinfo=timezone.utc),
+                activated_date=datetime(2026, 3, 1, tzinfo=UTC),
+                closed_date=datetime(2026, 3, 4, tzinfo=UTC),
             ),
             make_work_item(
                 id_=2,
                 assigned_to="jane",
-                activated_date=datetime(2026, 3, 2, tzinfo=timezone.utc),
-                closed_date=datetime(2026, 3, 6, tzinfo=timezone.utc),
+                activated_date=datetime(2026, 3, 2, tzinfo=UTC),
+                closed_date=datetime(2026, 3, 6, tzinfo=UTC),
             ),
         ]
         result = calculate_cycle_times(items)
@@ -34,14 +34,14 @@ class TestCalculateCycleTimes:
             make_work_item(
                 id_=1,
                 assigned_to="jane",
-                activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-                closed_date=datetime(2026, 3, 3, tzinfo=timezone.utc),
+                activated_date=datetime(2026, 3, 1, tzinfo=UTC),
+                closed_date=datetime(2026, 3, 3, tzinfo=UTC),
             ),
             make_work_item(
                 id_=2,
                 assigned_to="john",
-                activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-                closed_date=datetime(2026, 3, 5, tzinfo=timezone.utc),
+                activated_date=datetime(2026, 3, 1, tzinfo=UTC),
+                closed_date=datetime(2026, 3, 5, tzinfo=UTC),
             ),
         ]
         result = calculate_cycle_times(items)
@@ -54,14 +54,14 @@ class TestCalculateCycleTimes:
             make_work_item(
                 id_=1,
                 assigned_to="jane",
-                activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-                closed_date=datetime(2026, 3, 3, tzinfo=timezone.utc),
+                activated_date=datetime(2026, 3, 1, tzinfo=UTC),
+                closed_date=datetime(2026, 3, 3, tzinfo=UTC),
             ),
             make_work_item(id_=2, assigned_to="jane", activated_date=None, closed_date=None),
             make_work_item(
                 id_=3,
                 assigned_to="jane",
-                activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                activated_date=datetime(2026, 3, 1, tzinfo=UTC),
                 closed_date=None,
             ),
         ]
@@ -84,15 +84,15 @@ class TestCalculateCycleTimes:
             make_work_item(
                 id_=1,
                 assigned_to="jane",
-                activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-                closed_date=datetime(2026, 3, 4, tzinfo=timezone.utc),
+                activated_date=datetime(2026, 3, 1, tzinfo=UTC),
+                closed_date=datetime(2026, 3, 4, tzinfo=UTC),
                 scope_status=ScopeStatus.COMMITTED,
             ),
             make_work_item(
                 id_=2,
                 assigned_to="joe",
-                activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-                closed_date=datetime(2026, 3, 20, tzinfo=timezone.utc),
+                activated_date=datetime(2026, 3, 1, tzinfo=UTC),
+                closed_date=datetime(2026, 3, 20, tzinfo=UTC),
                 scope_status=ScopeStatus.CARRIED_OVER,
             ),
         ]
@@ -109,15 +109,15 @@ class TestCalculateCycleTimes:
             make_work_item(
                 id_=1,
                 assigned_to="jane",
-                activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-                closed_date=datetime(2026, 3, 4, tzinfo=timezone.utc),
+                activated_date=datetime(2026, 3, 1, tzinfo=UTC),
+                closed_date=datetime(2026, 3, 4, tzinfo=UTC),
                 scope_status=ScopeStatus.COMMITTED,
             ),
             make_work_item(
                 id_=2,
                 assigned_to="joe",
-                activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
-                closed_date=datetime(2026, 3, 10, tzinfo=timezone.utc),
+                activated_date=datetime(2026, 3, 1, tzinfo=UTC),
+                closed_date=datetime(2026, 3, 10, tzinfo=UTC),
                 scope_status=ScopeStatus.REMOVED,
             ),
         ]

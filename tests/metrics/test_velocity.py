@@ -1,5 +1,4 @@
 """Tests for sprint_metrics.metrics.velocity — Step 5 TDD."""
-from datetime import datetime, timezone
 
 import pytest
 
