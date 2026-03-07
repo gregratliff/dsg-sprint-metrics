@@ -177,16 +177,27 @@ def run(
 
     # Fetch work items referenced in PRs but missing from sprint query
     existing_wi_ids = {wi.id for wi in work_items}
-    pr_referenced_ids: set[int] = set()
+    # Build mapping: work_item_id -> list of (PR number, PR author) for diagnostics
+    wi_id_to_prs: dict[int, list[tuple[int, str]]] = {}
     for pr in all_prs:
-        pr_referenced_ids.update(pr.extract_work_item_ids())
-    missing_ids = sorted(pr_referenced_ids - existing_wi_ids)
+        for wi_id in pr.extract_work_item_ids():
+            wi_id_to_prs.setdefault(wi_id, []).append((pr.number, pr.author))
+    missing_ids = sorted(set(wi_id_to_prs.keys()) - existing_wi_ids)
     if missing_ids:
         logger.info(
             "Fetching %d PR-referenced work items not in sprint query...",
             len(missing_ids),
         )
         extra_items = ado_client.get_work_items_by_ids(missing_ids)
+        returned_ids = {wi.id for wi in extra_items}
+        # Warn about IDs that weren't found, with the PR that referenced them
+        for wid in missing_ids:
+            if wid not in returned_ids:
+                for pr_number, pr_author in wi_id_to_prs[wid]:
+                    logger.warning(
+                        "Work item %d not found — referenced by PR #%d (%s)",
+                        wid, pr_number, pr_author,
+                    )
         # Only keep items assigned to team members
         extra_items = filter_work_items_to_team(extra_items, team_identities)
         if extra_items:

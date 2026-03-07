@@ -1,5 +1,6 @@
 """Tests for sprint_metrics.main — Step 11 TDD (integration-style, all clients mocked)."""
 import csv
+import logging
 import os
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
@@ -444,8 +445,11 @@ class TestRun:
         team_row = [r for r in rows if r["member"] == "TEAM"][0]
         assert int(team_row["pr_count"]) == 1  # Only from repo2
 
-    def test_invalid_pr_work_item_ids_continue(self, tmp_path):
-        """Pipeline completes even when PR references non-existent work items."""
+    def test_invalid_pr_work_item_ids_continue(self, tmp_path, caplog):
+        """Pipeline completes even when PR references non-existent work items.
+
+        Warning should include the offending PR number and author.
+        """
         cfg_file = tmp_path / "config.yaml"
         cfg_file.write_text(VALID_YAML)
         output_dir = tmp_path / "output"
@@ -458,22 +462,32 @@ class TestRun:
 
         # PR references a non-existent work item
         bad_ref_pr = PullRequest(
-            id=999, number=99, title="1234 bad ref PR", author="janesmith",
+            id=999, number=99, title="12345 bad ref PR", author="janesmith",
             created_at=datetime(2026, 3, 2, 10, 0, 0, tzinfo=timezone.utc),
             merged_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=timezone.utc),
             closed_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=timezone.utc),
-            repo="myorg/repo1", commit_messages=["AB#5678 also fake"],
+            repo="myorg/repo1", commit_messages=["AB#56789 also fake"],
         )
         mock_gh = MagicMock()
         mock_gh.get_pull_requests.return_value = _sample_prs() + [bad_ref_pr]
 
         with patch("sprint_metrics.main._create_ado_client", return_value=mock_ado), \
              patch("sprint_metrics.main._create_github_client", return_value=mock_gh), \
-             patch.dict(os.environ, {"ADO_PAT": "fake", "GITHUB_PAT": "fake"}):
+             patch.dict(os.environ, {"ADO_PAT": "fake", "GITHUB_PAT": "fake"}), \
+             caplog.at_level(logging.WARNING):
             run(config_path=str(cfg_file), output_dir=str(output_dir))
 
         report_path = output_dir / "Sprint_10_report.csv"
         assert report_path.exists()
+
+        # Warning should mention the unfound work item IDs with PR context
+        warnings = [r.message for r in caplog.records if r.levelno == logging.WARNING]
+        # Work item 12345 referenced by PR #99 (janesmith)
+        assert any("12345" in w and "#99" in w and "janesmith" in w for w in warnings), \
+            f"Expected warning about work item 12345 from PR #99 by janesmith, got: {warnings}"
+        # Work item 56789 referenced by PR #99 (janesmith)
+        assert any("56789" in w and "#99" in w and "janesmith" in w for w in warnings), \
+            f"Expected warning about work item 56789 from PR #99 by janesmith, got: {warnings}"
 
     def test_output_dir_not_found_raises_clear_error(self, tmp_path):
         """Non-existent output directory gives a clear error message."""
