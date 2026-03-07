@@ -1,12 +1,15 @@
 """GitHub API client for fetching pull requests."""
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
 from github import GithubException
 
 from sprint_metrics.models import PullRequest
+
+logger = logging.getLogger(__name__)
 
 
 class GitHubClient:
@@ -41,15 +44,22 @@ class GitHubClient:
             scanned += 1
             # PRs are sorted newest-first; stop once we're before the sprint window
             if pr.created_at < start_date:
-                print(f"  Scanned {scanned} PRs, reached pre-sprint date, stopping")
+                logger.info("  Scanned %d PRs, reached pre-sprint date, stopping", scanned)
                 break
             if pr.created_at > end_date:
                 continue
             if team_usernames and pr.user.login not in team_usernames:
                 continue
 
-            print(f"  PR #{pr.number}: {pr.title} ({pr.user.login})")
-            commit_messages = [c.commit.message for c in pr.get_commits()]
+            logger.info("  PR #%d: %s (%s)", pr.number, pr.title, pr.user.login)
+            try:
+                commit_messages = [c.commit.message for c in pr.get_commits()]
+            except Exception:
+                logger.warning(
+                    "  Failed to fetch commits for PR #%d — continuing without commit messages",
+                    pr.number,
+                )
+                commit_messages = []
 
             results.append(
                 PullRequest(
@@ -66,5 +76,5 @@ class GitHubClient:
                 )
             )
 
-        print(f"  Found {len(results)} matching PRs in {repo}")
+        logger.info("  Found %d matching PRs in %s", len(results), repo)
         return results

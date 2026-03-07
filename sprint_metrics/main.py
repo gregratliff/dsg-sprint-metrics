@@ -2,9 +2,12 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import re
 import sys
+
+logger = logging.getLogger(__name__)
 
 from sprint_metrics.config import load_config, Config
 from sprint_metrics.clients.azure_devops_client import AzureDevOpsClient
@@ -117,13 +120,14 @@ def run(
     # Validate PATs exist
     for env_var in [cfg.azure_devops.pat_env_var, cfg.github.pat_env_var]:
         if not os.environ.get(env_var):
-            print(f"Error: environment variable '{env_var}' is not set", file=sys.stderr)
+            logger.error("Environment variable '%s' is not set", env_var)
             sys.exit(1)
 
     if dry_run:
-        print(f"Config validated: sprint='{cfg.sprint.name}', "
-              f"{len(cfg.team_members)} team members, "
-              f"{len(cfg.categories)} categories")
+        logger.info(
+            "Config validated: sprint='%s', %d team members, %d categories",
+            cfg.sprint.name, len(cfg.team_members), len(cfg.categories),
+        )
         return
 
     ado_client = _create_ado_client(cfg)
@@ -133,9 +137,9 @@ def run(
     iteration_path = f"{cfg.azure_devops.project}\\{cfg.sprint.name}"
 
     # Fetch data
-    print(f"Fetching ADO work items for '{iteration_path}'...")
+    logger.info("Fetching ADO work items for '%s'...", iteration_path)
     work_items = ado_client.get_sprint_work_items(iteration_path)
-    print(f"Found {len(work_items)} work items")
+    logger.info("Found %d work items", len(work_items))
 
     # Filter to configured team members only
     team_identities = {m.ado_identity for m in cfg.team_members}
@@ -143,22 +147,25 @@ def run(
     work_items = filter_work_items_to_team(work_items, team_identities)
     excluded = before - len(work_items)
     if excluded:
-        print(f"Filtered out {excluded} work items not assigned to team members")
+        logger.info("Filtered out %d work items not assigned to team members", excluded)
 
     all_prs = []
     team_usernames = [m.github_username for m in cfg.team_members]
     for repo_name in cfg.github.repos:
         repo_full = f"{cfg.github.org}/{repo_name}"
-        print(f"Fetching PRs from {repo_full}...")
-        prs = gh_client.get_pull_requests(
-            repo=repo_full,
-            start_date=cfg.sprint.start_date,
-            end_date=cfg.sprint.end_date,
-            team_usernames=team_usernames,
-        )
-        all_prs.extend(prs)
+        logger.info("Fetching PRs from %s...", repo_full)
+        try:
+            prs = gh_client.get_pull_requests(
+                repo=repo_full,
+                start_date=cfg.sprint.start_date,
+                end_date=cfg.sprint.end_date,
+                team_usernames=team_usernames,
+            )
+            all_prs.extend(prs)
+        except Exception:
+            logger.warning("Failed to fetch PRs from %s — skipping this repo", repo_full)
 
-    print(f"Total: {len(all_prs)} PRs across {len(cfg.github.repos)} repos")
+    logger.info("Total: %d PRs across %d repos", len(all_prs), len(cfg.github.repos))
 
     # Filter deployment / excluded PRs
     if cfg.github.pr_exclude_patterns:
@@ -166,7 +173,7 @@ def run(
         all_prs = filter_excluded_prs(all_prs, cfg.github.pr_exclude_patterns)
         excluded = before - len(all_prs)
         if excluded:
-            print(f"Excluded {excluded} PRs matching exclude patterns")
+            logger.info("Excluded %d PRs matching exclude patterns", excluded)
 
     # Fetch work items referenced in PRs but missing from sprint query
     existing_wi_ids = {wi.id for wi in work_items}
@@ -175,12 +182,15 @@ def run(
         pr_referenced_ids.update(pr.extract_work_item_ids())
     missing_ids = sorted(pr_referenced_ids - existing_wi_ids)
     if missing_ids:
-        print(f"Fetching {len(missing_ids)} PR-referenced work items not in sprint query...")
+        logger.info(
+            "Fetching %d PR-referenced work items not in sprint query...",
+            len(missing_ids),
+        )
         extra_items = ado_client.get_work_items_by_ids(missing_ids)
         # Only keep items assigned to team members
         extra_items = filter_work_items_to_team(extra_items, team_identities)
         if extra_items:
-            print(f"  Added {len(extra_items)} work items from PR references")
+            logger.info("  Added %d work items from PR references", len(extra_items))
             work_items.extend(extra_items)
 
     # Calculate metrics
@@ -199,11 +209,20 @@ def run(
     # Write report
     safe_name = cfg.sprint.name.replace("\\", "_").replace("/", "_").replace(" ", "_")
     output_path = os.path.join(output_dir, f"{safe_name}_report.csv")
-    write_sprint_report(metrics, output_path)
-    print(f"Report written to {output_path}")
+    try:
+        write_sprint_report(metrics, output_path)
+    except Exception as exc:
+        raise RuntimeError(
+            f"Failed to write report to '{output_path}': {exc}"
+        ) from exc
+    logger.info("Report written to %s", output_path)
 
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s: %(message)s",
+    )
     args = parse_args()
     run(config_path=args.config, output_dir=args.output_dir, dry_run=args.dry_run)
 

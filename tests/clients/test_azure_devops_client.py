@@ -197,3 +197,46 @@ class TestAzureDevOpsClient:
         client.get_sprint_work_items("P\\S1")
 
         assert mock_wit.get_work_items.call_count == 2
+
+    def test_get_work_items_by_ids_skips_invalid_ids(self):
+        """Invalid work item IDs are warned about and skipped, not fatal."""
+        mock_wit = MagicMock()
+
+        valid_item = _make_ado_work_item(101, title="Valid item")
+
+        # Individual fallback: 101 succeeds, 9999 fails
+        def per_item_side_effect(ids, fields=None):
+            if ids == [101]:
+                return [valid_item]
+            if ids == [101, 9999]:
+                raise Exception("TF401232: Work item 9999 does not exist")
+            raise Exception("TF401232: Work item 9999 does not exist")
+        mock_wit.get_work_items.side_effect = per_item_side_effect
+
+        client = self._make_client(mock_wit)
+        items = client.get_work_items_by_ids([101, 9999])
+
+        assert len(items) == 1
+        assert items[0].id == 101
+
+    def test_get_work_items_by_ids_returns_empty_on_all_invalid(self):
+        """All invalid IDs returns empty list with warnings, not crash."""
+        mock_wit = MagicMock()
+
+        mock_wit.get_work_items.side_effect = Exception(
+            "TF401232: Work item does not exist"
+        )
+
+        client = self._make_client(mock_wit)
+        items = client.get_work_items_by_ids([9999, 8888])
+
+        assert items == []
+
+    def test_get_sprint_work_items_wraps_wiql_error(self):
+        """WIQL query failure is re-raised as RuntimeError with context."""
+        mock_wit = MagicMock()
+        mock_wit.query_by_wiql.side_effect = Exception("Network timeout")
+
+        client = self._make_client(mock_wit)
+        with pytest.raises(RuntimeError, match="Failed to query sprint work items"):
+            client.get_sprint_work_items("MyProject\\Sprint 10")

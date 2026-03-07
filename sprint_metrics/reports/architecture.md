@@ -38,3 +38,4 @@ rework_count, rework_points, rework_rate,
 - Missing metric data uses empty string (`""`) rather than 0, so consumers can distinguish "no data" from "zero"
 - The `member_info` dict (added by `normalize_metrics_identity()`) provides the identity mapping; if absent, identity columns default to empty
 - Sprint names with path separators (`\`, `/`) are sanitized in `main.py` before constructing the output filename
+- Report write failures (bad path, permissions) are caught in `main.py` and re-raised as `RuntimeError` with the output path in the message

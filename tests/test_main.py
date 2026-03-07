@@ -409,6 +409,88 @@ class TestRun:
         # Only 1 PR should be counted (deploy PR excluded)
         assert int(team_row["pr_count"]) == 1
 
+    def test_single_repo_failure_continues_with_other_repos(self, tmp_path):
+        """If one repo fails, PRs from other repos are still collected."""
+        yaml_two_repos = VALID_YAML.replace(
+            '  repos:\n    - "repo1"',
+            '  repos:\n    - "repo1"\n    - "repo2"',
+        )
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(yaml_two_repos)
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        mock_ado = MagicMock()
+        mock_ado.get_sprint_work_items.return_value = _sample_work_items()
+
+        mock_gh = MagicMock()
+        # First repo fails, second succeeds
+        def side_effect(repo, **kwargs):
+            if "repo1" in repo:
+                raise RuntimeError("Failed to access repository 'myorg/repo1'")
+            return _sample_prs()
+        mock_gh.get_pull_requests.side_effect = side_effect
+
+        with patch("sprint_metrics.main._create_ado_client", return_value=mock_ado), \
+             patch("sprint_metrics.main._create_github_client", return_value=mock_gh), \
+             patch.dict(os.environ, {"ADO_PAT": "fake", "GITHUB_PAT": "fake"}):
+            run(config_path=str(cfg_file), output_dir=str(output_dir))
+
+        report_path = output_dir / "Sprint_10_report.csv"
+        assert report_path.exists()
+        with open(report_path) as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+        team_row = [r for r in rows if r["member"] == "TEAM"][0]
+        assert int(team_row["pr_count"]) == 1  # Only from repo2
+
+    def test_invalid_pr_work_item_ids_continue(self, tmp_path):
+        """Pipeline completes even when PR references non-existent work items."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(VALID_YAML)
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        mock_ado = MagicMock()
+        mock_ado.get_sprint_work_items.return_value = _sample_work_items()
+        # get_work_items_by_ids returns empty (all invalid IDs were skipped)
+        mock_ado.get_work_items_by_ids.return_value = []
+
+        # PR references a non-existent work item
+        bad_ref_pr = PullRequest(
+            id=999, number=99, title="1234 bad ref PR", author="janesmith",
+            created_at=datetime(2026, 3, 2, 10, 0, 0, tzinfo=timezone.utc),
+            merged_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=timezone.utc),
+            closed_at=datetime(2026, 3, 3, 10, 0, 0, tzinfo=timezone.utc),
+            repo="myorg/repo1", commit_messages=["AB#5678 also fake"],
+        )
+        mock_gh = MagicMock()
+        mock_gh.get_pull_requests.return_value = _sample_prs() + [bad_ref_pr]
+
+        with patch("sprint_metrics.main._create_ado_client", return_value=mock_ado), \
+             patch("sprint_metrics.main._create_github_client", return_value=mock_gh), \
+             patch.dict(os.environ, {"ADO_PAT": "fake", "GITHUB_PAT": "fake"}):
+            run(config_path=str(cfg_file), output_dir=str(output_dir))
+
+        report_path = output_dir / "Sprint_10_report.csv"
+        assert report_path.exists()
+
+    def test_output_dir_not_found_raises_clear_error(self, tmp_path):
+        """Non-existent output directory gives a clear error message."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(VALID_YAML)
+
+        mock_ado = MagicMock()
+        mock_ado.get_sprint_work_items.return_value = _sample_work_items()
+        mock_gh = MagicMock()
+        mock_gh.get_pull_requests.return_value = _sample_prs()
+
+        with patch("sprint_metrics.main._create_ado_client", return_value=mock_ado), \
+             patch("sprint_metrics.main._create_github_client", return_value=mock_gh), \
+             patch.dict(os.environ, {"ADO_PAT": "fake", "GITHUB_PAT": "fake"}), \
+             pytest.raises(RuntimeError, match="Failed to write report"):
+            run(config_path=str(cfg_file), output_dir="/nonexistent/path/does/not/exist")
+
     def test_missing_pat_env_var_raises(self, tmp_path):
         cfg_file = tmp_path / "config.yaml"
         cfg_file.write_text(VALID_YAML)

@@ -1,6 +1,7 @@
 """Azure DevOps API client for fetching sprint work items."""
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -10,12 +11,28 @@ from sprint_metrics.models import WorkItem
 
 BATCH_SIZE = 200
 
+logger = logging.getLogger(__name__)
+
 
 class AzureDevOpsClient:
     def __init__(self, connection, project: str, category_field: str = "Custom.Category"):
         self._wit = connection.clients.get_work_item_tracking_client()
         self._project = project
         self._category_field = category_field
+
+    @property
+    def _fields(self) -> list[str]:
+        return [
+            "System.Title",
+            "System.AssignedTo",
+            "Microsoft.VSTS.Scheduling.StoryPoints",
+            "System.State",
+            self._category_field,
+            "System.Tags",
+            "Microsoft.VSTS.Common.ActivatedDate",
+            "Microsoft.VSTS.Common.ClosedDate",
+            "System.IterationPath",
+        ]
 
     def get_sprint_work_items(self, iteration_path: str) -> list[WorkItem]:
         wiql = Wiql(
@@ -25,27 +42,20 @@ class AzureDevOpsClient:
                 "AND [System.WorkItemType] IN ('User Story', 'Bug', 'Task', 'Feature')"
             )
         )
-        result = self._wit.query_by_wiql(wiql, top=1000)
+        try:
+            result = self._wit.query_by_wiql(wiql, top=1000)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to query sprint work items for '{iteration_path}': {exc}"
+            ) from exc
         if not result.work_items:
             return []
 
         ids = [ref.id for ref in result.work_items]
-        fields = [
-            "System.Title",
-            "System.AssignedTo",
-            "Microsoft.VSTS.Scheduling.StoryPoints",
-            "System.State",
-            self._category_field,
-            "System.Tags",
-            "Microsoft.VSTS.Common.ActivatedDate",
-            "Microsoft.VSTS.Common.ClosedDate",
-            "System.IterationPath",
-        ]
-
         raw_items = []
         for i in range(0, len(ids), BATCH_SIZE):
             batch = ids[i : i + BATCH_SIZE]
-            raw_items.extend(self._wit.get_work_items(batch, fields=fields))
+            raw_items.extend(self._wit.get_work_items(batch, fields=self._fields))
 
         return [self._to_work_item(raw) for raw in raw_items]
 
@@ -53,21 +63,22 @@ class AzureDevOpsClient:
         """Fetch specific work items by their IDs."""
         if not ids:
             return []
-        fields = [
-            "System.Title",
-            "System.AssignedTo",
-            "Microsoft.VSTS.Scheduling.StoryPoints",
-            "System.State",
-            self._category_field,
-            "System.Tags",
-            "Microsoft.VSTS.Common.ActivatedDate",
-            "Microsoft.VSTS.Common.ClosedDate",
-            "System.IterationPath",
-        ]
         raw_items = []
         for i in range(0, len(ids), BATCH_SIZE):
             batch = ids[i : i + BATCH_SIZE]
-            raw_items.extend(self._wit.get_work_items(batch, fields=fields))
+            try:
+                raw_items.extend(self._wit.get_work_items(batch, fields=self._fields))
+            except Exception:
+                # Batch failed (likely a bad ID) — try individually
+                for wid in batch:
+                    try:
+                        raw_items.extend(
+                            self._wit.get_work_items([wid], fields=self._fields)
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Work item %d not found or inaccessible — skipping", wid
+                        )
         return [self._to_work_item(raw) for raw in raw_items]
 
     def _to_work_item(self, raw) -> WorkItem:

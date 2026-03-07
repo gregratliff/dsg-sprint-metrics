@@ -241,6 +241,28 @@ class TestGitHubClient:
         assert len(prs) == 1
         assert prs[0].number == 1
 
+    def test_get_commits_failure_continues_with_empty_messages(self):
+        """If get_commits() fails for a PR, the PR is still returned with empty commit_messages."""
+        mock_gh = MagicMock()
+        mock_repo = MagicMock()
+        mock_gh.get_repo.return_value = mock_repo
+
+        pr_with_failing_commits = _make_mock_pr(number=1, title="AB#100 feature")
+        pr_with_failing_commits.get_commits.side_effect = Exception("API rate limit")
+        pr_with_failing_commits.body = ""
+
+        mock_repo.get_pulls.return_value = [pr_with_failing_commits]
+
+        client = self._make_client(mock_gh)
+        prs = client.get_pull_requests(
+            repo="myorg/repo1",
+            start_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            end_date=datetime(2026, 3, 7, tzinfo=timezone.utc),
+        )
+
+        assert len(prs) == 1
+        assert prs[0].commit_messages == []
+
     def test_repo_not_found_raises_runtime_error(self):
         """404 from GitHub is wrapped in a RuntimeError with helpful message."""
         mock_gh = MagicMock()
