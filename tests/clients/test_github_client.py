@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock, PropertyMock
 
 import pytest
+from github import GithubException
 
 from sprint_metrics.clients.github_client import GitHubClient
 from sprint_metrics.models import PullRequest
@@ -183,3 +184,73 @@ class TestGitHubClient:
         )
 
         assert len(prs) == 2
+
+    def test_early_exit_skips_old_prs(self):
+        """PRs sorted newest-first; scanning stops at first PR before start_date."""
+        mock_gh = MagicMock()
+        mock_repo = MagicMock()
+        mock_gh.get_repo.return_value = mock_repo
+
+        # Sorted desc: in-range, then old, then even-older
+        in_range = _make_mock_pr(
+            number=10,
+            created_at=datetime(2026, 3, 3, tzinfo=timezone.utc),
+        )
+        old_pr = _make_mock_pr(
+            number=5,
+            created_at=datetime(2026, 2, 1, tzinfo=timezone.utc),
+        )
+        even_older = _make_mock_pr(
+            number=1,
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        mock_repo.get_pulls.return_value = [in_range, old_pr, even_older]
+
+        client = self._make_client(mock_gh)
+        prs = client.get_pull_requests(
+            repo="myorg/repo1",
+            start_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            end_date=datetime(2026, 3, 7, tzinfo=timezone.utc),
+        )
+
+        assert len(prs) == 1
+        assert prs[0].number == 10
+        # even_older should never have get_commits called (we broke early at old_pr)
+        even_older.get_commits.assert_not_called()
+
+    def test_naive_dates_work_with_aware_github_dates(self):
+        """Naive config dates are normalized to UTC for comparison."""
+        mock_gh = MagicMock()
+        mock_repo = MagicMock()
+        mock_gh.get_repo.return_value = mock_repo
+        mock_repo.get_pulls.return_value = [
+            _make_mock_pr(
+                number=1,
+                created_at=datetime(2026, 3, 2, 12, 0, 0, tzinfo=timezone.utc),
+            )
+        ]
+
+        client = self._make_client(mock_gh)
+        # Pass naive datetimes (no tzinfo), like datetime.fromisoformat("2026-03-01")
+        prs = client.get_pull_requests(
+            repo="myorg/repo1",
+            start_date=datetime(2026, 3, 1),
+            end_date=datetime(2026, 3, 7),
+        )
+
+        assert len(prs) == 1
+        assert prs[0].number == 1
+
+    def test_repo_not_found_raises_runtime_error(self):
+        """404 from GitHub is wrapped in a RuntimeError with helpful message."""
+        mock_gh = MagicMock()
+        exc = GithubException(404, {"message": "Not Found"}, None)
+        mock_gh.get_repo.side_effect = exc
+
+        client = self._make_client(mock_gh)
+        with pytest.raises(RuntimeError, match="Failed to access repository 'myorg/missing'"):
+            client.get_pull_requests(
+                repo="myorg/missing",
+                start_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                end_date=datetime(2026, 3, 7, tzinfo=timezone.utc),
+            )
