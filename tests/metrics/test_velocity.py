@@ -179,6 +179,27 @@ class TestCalculateVelocity:
         # delivered = only committed closed = 5 (NOT 8)
         assert result["team"]["delivered_points"] == 5.0
 
+    def test_carried_over_closed_still_counts_as_carryover(self):
+        """CARRIED_OVER items always count as carryover, even if closed in the next sprint.
+
+        planned must equal delivered + carryover + removed (non-carryover).
+        A carried-over item closed in the next sprint wasn't delivered HERE.
+        """
+        items = [
+            make_work_item(id_=1, story_points=5.0, state="Closed",
+                           scope_status=ScopeStatus.COMMITTED),
+            make_work_item(id_=2, story_points=3.0, state="Closed",
+                           scope_status=ScopeStatus.CARRIED_OVER),
+        ]
+        result = calculate_velocity(items)
+
+        # delivered = 5 (only committed), carryover = 3 (carried_over, even though closed)
+        assert result["team"]["delivered_points"] == 5.0
+        assert result["team"]["carryover_points"] == 3.0
+        assert result["team"]["planned_points"] == 8.0
+        # Invariant: planned == delivered + carryover + scope_removed(non-carryover)
+        # Here: 8 = 5 + 3 + 0 ✓
+
     def test_carried_over_tracks_scope_removed(self):
         """CARRIED_OVER points should count toward scope_removed_points."""
         items = [

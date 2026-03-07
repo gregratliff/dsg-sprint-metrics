@@ -59,8 +59,11 @@ def calculate_velocity(work_items: list[WorkItem]) -> dict:
         elif wi.scope_status in _SCOPE_REMOVED_STATUSES:
             team_scope_removed += pts
 
-        # Carryover = non-closed items still in the sprint
-        if not is_closed and wi.scope_status in _CARRYOVER_STATUSES:
+        # Carryover: CARRIED_OVER always counts (even if closed in the next sprint,
+        # it wasn't delivered in THIS sprint). Other statuses only if not closed.
+        if wi.scope_status == ScopeStatus.CARRIED_OVER:
+            team_carryover += pts
+        elif not is_closed and wi.scope_status in _CARRYOVER_STATUSES:
             team_carryover += pts
 
     delivery_rate = team_delivered / team_planned if team_planned > 0 else 0.0

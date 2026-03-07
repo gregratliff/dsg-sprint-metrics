@@ -29,7 +29,7 @@ Metric modules are stateless — no classes, no side effects. They receive lists
 | Module | Input | Individual Key | Key Metrics |
 |---|---|---|---|
 | `velocity` | `[WorkItem]` | `assigned_to` | planned_points, delivered_points, delivery_rate, scope_added/removed, carryover, commitment_reliability |
-| `cycle_time` | `[WorkItem]` | `assigned_to` | average_days, median_days, count |
+| `cycle_time` | `[WorkItem]` | `assigned_to` | average_days, median_days, count (COMMITTED + ADDED only) |
 | `pr_cycle_time` | `[PullRequest]` | `author` | average_hours, median_hours, count |
 | `rework` | `[WorkItem], labels` | `assigned_to` | rework_count, rework_points, rework_rate |
 | `category_breakdown` | `[WorkItem], categories` | `assigned_to` | {category: {points, count}} |
@@ -40,6 +40,8 @@ Metric modules are stateless — no classes, no side effects. They receive lists
 - Closed states: `{"Closed", "Done", "Resolved"}` (defined in `velocity.py`)
 - Rework label matching is case-insensitive
 - Category "other" is suppressed from output if its count is 0
+- Cycle time excludes REMOVED and CARRIED_OVER items — they left the sprint, so their completion time belongs to wherever they landed
+- CARRIED_OVER items always count as carryover even if closed (in the next sprint), since they weren't delivered in the measured sprint. This ensures the invariant: planned = delivered + carryover + removed(non-carryover)
 
 ## Scope-Aware Velocity
 
@@ -56,7 +58,7 @@ The velocity calculator uses scope_status as follows:
 - **delivered_points** = closed items that are COMMITTED or ADDED_MID_SPRINT
 - **scope_added_points** = ADDED_MID_SPRINT points
 - **scope_removed_points** = REMOVED + CARRIED_OVER points (all items that left the sprint)
-- **carryover_points** = non-closed COMMITTED/ADDED items + all CARRIED_OVER items
+- **carryover_points** = non-closed COMMITTED/ADDED items + **all** CARRIED_OVER items (regardless of closed state — they weren't delivered in *this* sprint)
 - **commitment_reliability** = closed COMMITTED items / planned_points
 
 ### Carryover detection

@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 import pytest
 
 from sprint_metrics.metrics.cycle_time import calculate_cycle_times
+from sprint_metrics.models import ScopeStatus
 from tests.conftest import make_work_item
 
 
@@ -76,3 +77,51 @@ class TestCalculateCycleTimes:
         assert result["team"]["median_days"] == 0.0
         assert result["team"]["count"] == 0
         assert result["individual"] == {}
+
+    def test_carried_over_excluded_from_cycle_time(self):
+        """Items carried over to another sprint shouldn't count in this sprint's cycle time."""
+        items = [
+            make_work_item(
+                id_=1,
+                assigned_to="jane",
+                activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                closed_date=datetime(2026, 3, 4, tzinfo=timezone.utc),
+                scope_status=ScopeStatus.COMMITTED,
+            ),
+            make_work_item(
+                id_=2,
+                assigned_to="joe",
+                activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                closed_date=datetime(2026, 3, 20, tzinfo=timezone.utc),
+                scope_status=ScopeStatus.CARRIED_OVER,
+            ),
+        ]
+        result = calculate_cycle_times(items)
+
+        # Only jane's item should count
+        assert result["team"]["count"] == 1
+        assert result["team"]["average_days"] == pytest.approx(3.0)
+        assert "joe" not in result["individual"]
+
+    def test_removed_excluded_from_cycle_time(self):
+        """Items removed from sprint shouldn't count in this sprint's cycle time."""
+        items = [
+            make_work_item(
+                id_=1,
+                assigned_to="jane",
+                activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                closed_date=datetime(2026, 3, 4, tzinfo=timezone.utc),
+                scope_status=ScopeStatus.COMMITTED,
+            ),
+            make_work_item(
+                id_=2,
+                assigned_to="joe",
+                activated_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
+                closed_date=datetime(2026, 3, 10, tzinfo=timezone.utc),
+                scope_status=ScopeStatus.REMOVED,
+            ),
+        ]
+        result = calculate_cycle_times(items)
+
+        assert result["team"]["count"] == 1
+        assert "joe" not in result["individual"]

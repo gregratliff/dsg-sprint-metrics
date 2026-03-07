@@ -4,7 +4,10 @@ from __future__ import annotations
 from collections import defaultdict
 from statistics import median
 
-from sprint_metrics.models import WorkItem
+from sprint_metrics.models import ScopeStatus, WorkItem
+
+# Only count cycle time for items that stayed in the sprint
+_CYCLE_TIME_STATUSES = {ScopeStatus.COMMITTED, ScopeStatus.ADDED_MID_SPRINT}
 
 
 def calculate_cycle_times(work_items: list[WorkItem]) -> dict:
@@ -12,6 +15,8 @@ def calculate_cycle_times(work_items: list[WorkItem]) -> dict:
     all_times: list[float] = []
 
     for wi in work_items:
+        if wi.scope_status not in _CYCLE_TIME_STATUSES:
+            continue
         ct = wi.cycle_time_days
         if ct is None:
             continue
