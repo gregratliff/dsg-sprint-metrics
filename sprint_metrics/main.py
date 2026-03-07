@@ -42,10 +42,10 @@ def _create_ado_client(cfg: Config) -> AzureDevOpsClient:
 
 
 def _create_github_client(cfg: Config) -> GitHubClient:
-    from github import Github
+    from github import Auth, Github
 
     pat = os.environ.get(cfg.github.pat_env_var)
-    return GitHubClient(github=Github(pat))
+    return GitHubClient(github=Github(auth=Auth.Token(pat)))
 
 
 def run(

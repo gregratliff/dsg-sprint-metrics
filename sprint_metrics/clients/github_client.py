@@ -4,6 +4,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional
 
+from github import GithubException
+
 from sprint_metrics.models import PullRequest
 
 
@@ -18,7 +20,13 @@ class GitHubClient:
         end_date: datetime,
         team_usernames: Optional[list[str]] = None,
     ) -> list[PullRequest]:
-        gh_repo = self._gh.get_repo(repo)
+        try:
+            gh_repo = self._gh.get_repo(repo)
+        except GithubException as exc:
+            raise RuntimeError(
+                f"Failed to access repository '{repo}': {exc.data.get('message', exc)}. "
+                f"Check that the repo exists and your PAT has access."
+            ) from exc
         raw_prs = gh_repo.get_pulls(state="all", sort="created", direction="desc")
 
         results = []
