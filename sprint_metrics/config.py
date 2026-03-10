@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any
 
 import yaml
@@ -33,8 +32,6 @@ class GitHubConfig:
 class SprintConfig:
     stem: str
     name: str
-    start_date: datetime
-    end_date: datetime
     planning_offset_days: int = 7
 
 
@@ -104,12 +101,6 @@ def load_config(path: str) -> Config:
     sprint = SprintConfig(
         stem=_require(sprint_raw, "stem", "sprint"),
         name=_require(sprint_raw, "name", "sprint"),
-        start_date=datetime.fromisoformat(
-            str(_require(sprint_raw, "start_date", "sprint"))
-        ),
-        end_date=datetime.fromisoformat(
-            str(_require(sprint_raw, "end_date", "sprint"))
-        ),
         planning_offset_days=int(sprint_raw.get("planning_offset_days", 7)),
     )
 

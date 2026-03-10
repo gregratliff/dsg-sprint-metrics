@@ -233,21 +233,30 @@ def run(
     iteration_path = f"{cfg.azure_devops.project}\\{cfg.sprint.stem}\\{cfg.sprint.name}"
     team_identities = {m.ado_identity for m in cfg.team_members}
 
+    # Fetch sprint dates from ADO iteration node
+    sprint_path = f"{cfg.sprint.stem}\\{cfg.sprint.name}"
+    logger.info("Fetching iteration dates for '%s'...", sprint_path)
+    start_date, end_date = ado_client.get_iteration_dates(sprint_path)
+    logger.info("Sprint dates: %s to %s", start_date.date(), end_date.date())
+
+    # Ensure dates are timezone-aware for ASOF queries
+    if start_date.tzinfo is None:
+        start_date = start_date.replace(tzinfo=UTC)
+    if end_date.tzinfo is None:
+        end_date = end_date.replace(tzinfo=UTC)
+
     # Calculate planning snapshot date
-    planning_date = cfg.sprint.start_date + timedelta(days=cfg.sprint.planning_offset_days)
-    if planning_date > cfg.sprint.end_date:
+    planning_date = start_date + timedelta(days=cfg.sprint.planning_offset_days)
+    if planning_date > end_date:
         logger.warning(
             "planning_offset_days (%d) exceeds sprint duration — clamping to end_date",
             cfg.sprint.planning_offset_days,
         )
-        planning_date = cfg.sprint.end_date
+        planning_date = end_date
 
-    # Ensure dates are timezone-aware for ASOF queries
+    # Ensure planning_date is timezone-aware
     if planning_date.tzinfo is None:
         planning_date = planning_date.replace(tzinfo=UTC)
-    end_date = cfg.sprint.end_date
-    if end_date.tzinfo is None:
-        end_date = end_date.replace(tzinfo=UTC)
 
     # Fetch planning snapshot (what was in sprint after planning settled)
     logger.info("Fetching planning snapshot (as of %s)...", planning_date.date())
@@ -316,8 +325,8 @@ def run(
         try:
             prs = gh_client.get_pull_requests(
                 repo=repo_full,
-                start_date=cfg.sprint.start_date,
-                end_date=cfg.sprint.end_date,
+                start_date=start_date,
+                end_date=end_date,
                 team_usernames=team_usernames,
             )
             all_prs.extend(prs)

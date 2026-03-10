@@ -21,8 +21,7 @@ github:
 sprint:
   stem: "26\\Q1 2026"                   # Parent iteration path levels (above the sprint name)
   name: "Sprint 23.1"                   # Sprint name (leaf level) — can be overridden with --sprint-name
-  start_date: "2026-02-23"
-  end_date: "2026-03-06"
+  planning_offset_days: 7               # Optional: days after sprint start before planning snapshot (default: 7)
 
 team_members:
   - name: "Jane Smith"

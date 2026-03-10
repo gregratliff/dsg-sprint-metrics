@@ -122,9 +122,7 @@ github:
 sprint:
   stem: "26\\Q1 2026"                  # Parent iteration path levels (above sprint name)
   name: "Sprint 26.3.1"                # Sprint name (leaf level)
-  start_date: "2026-03-01"
-  end_date: "2026-03-14"
-  planning_offset_days: 7              # Days after start_date before planning snapshot
+  planning_offset_days: 7              # Optional: days after sprint start before planning snapshot
 
 team_members:
   - name: "Jane Smith"
@@ -156,6 +154,8 @@ MyProject\26\Q1 2026\Sprint 26.3.1
 ```
 
 The **stem** stays constant across sprints within the same quarter/year. Only the **name** changes each sprint. You can override the sprint name from the command line with `--sprint-name` so you don't have to edit the config file every sprint.
+
+**Sprint dates are fetched automatically** from the ADO iteration node — you do not need to specify `start_date` or `end_date` in the config. The tool reads the dates configured on the iteration in Azure DevOps (Project Settings → Iterations).
 
 ### Finding Your Iteration Path
 
@@ -246,6 +246,8 @@ The output is a CSV file named `{sprint_name}_report.csv` (with path separators 
 A typical run produces log output like this:
 
 ```
+INFO: Fetching iteration dates for '26\Q1 2026\Sprint 26.3.1'...
+INFO: Sprint dates: 2026-03-01 to 2026-03-14
 INFO: Fetching planning snapshot (as of 2026-03-08)...
 INFO: Planning snapshot: 24 work items
 INFO: Fetching end-of-sprint snapshot (as of 2026-03-14)...
@@ -271,6 +273,7 @@ INFO: Report written to ./reports/Sprint_26.3.1_report.csv
 | `Work item N not found — referenced by PR #M (author)` | A PR references a work item ID that doesn't exist in ADO | The invalid reference is skipped; other metrics are unaffected |
 | `Failed to fetch PRs from org/repo — skipping this repo` | A GitHub repo is inaccessible (permissions, deleted, wrong name) | PRs from that repo are excluded; PRs from other repos are still collected |
 | `planning_offset_days (N) exceeds sprint duration — clamping to end_date` | The planning offset is longer than the sprint itself | The planning snapshot uses the end date instead |
+| `Failed to fetch iteration dates for '...'` | The iteration path doesn't exist in ADO, or dates aren't set on the iteration node | Fatal error — verify your `stem` and `name` match the iteration tree in Project Settings |
 
 ## Development Setup
 

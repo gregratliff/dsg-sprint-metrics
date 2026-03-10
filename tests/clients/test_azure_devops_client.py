@@ -323,6 +323,47 @@ class TestAzureDevOpsClient:
         assert len(items) == 1
         assert items[0].id == 101
 
+    def test_get_iteration_dates_returns_start_and_end(self):
+        """get_iteration_dates fetches start and finish dates from classification node."""
+        mock_wit = MagicMock()
+        node = MagicMock()
+        node.attributes = {
+            "startDate": "2026-03-01T00:00:00Z",
+            "finishDate": "2026-03-14T00:00:00Z",
+        }
+        mock_wit.get_classification_node.return_value = node
+
+        client = self._make_client(mock_wit)
+        start, end = client.get_iteration_dates("26\\Q1 2026\\Sprint 10")
+
+        assert start == datetime(2026, 3, 1, tzinfo=UTC)
+        assert end == datetime(2026, 3, 14, tzinfo=UTC)
+        mock_wit.get_classification_node.assert_called_once_with(
+            project="MyProject",
+            structure_group="iterations",
+            path="26\\Q1 2026\\Sprint 10",
+        )
+
+    def test_get_iteration_dates_missing_attributes_raises(self):
+        """Missing date attributes raises RuntimeError."""
+        mock_wit = MagicMock()
+        node = MagicMock()
+        node.attributes = None
+        mock_wit.get_classification_node.return_value = node
+
+        client = self._make_client(mock_wit)
+        with pytest.raises(RuntimeError, match="No date attributes"):
+            client.get_iteration_dates("26\\Q1 2026\\Sprint 10")
+
+    def test_get_iteration_dates_api_error_raises(self):
+        """API error is wrapped in RuntimeError with context."""
+        mock_wit = MagicMock()
+        mock_wit.get_classification_node.side_effect = Exception("Not found")
+
+        client = self._make_client(mock_wit)
+        with pytest.raises(RuntimeError, match="Failed to fetch iteration dates"):
+            client.get_iteration_dates("26\\Q1 2026\\Sprint 10")
+
     def test_get_sprint_work_items_skips_deleted_items(self):
         """Current query also handles deleted items gracefully."""
         mock_wit = MagicMock()

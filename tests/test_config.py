@@ -24,8 +24,6 @@ github:
 sprint:
   stem: "26\\\\Q1 2026"
   name: "Sprint 23.1"
-  start_date: "2026-02-23"
-  end_date: "2026-03-06"
 
 team_members:
   - name: "Jane Smith"
@@ -70,10 +68,6 @@ class TestLoadConfig:
 
         assert cfg.sprint.stem == "26\\Q1 2026"
         assert cfg.sprint.name == "Sprint 23.1"
-        assert cfg.sprint.start_date.year == 2026
-        assert cfg.sprint.start_date.month == 2
-        assert cfg.sprint.start_date.day == 23
-        assert cfg.sprint.end_date.year == 2026
 
     def test_sprint_stem_required(self, tmp_path):
         yaml_no_stem = VALID_YAML.replace('  stem: "26\\\\Q1 2026"\n', "")
@@ -183,8 +177,8 @@ class TestLoadConfig:
     def test_planning_offset_days_explicit(self, tmp_path):
         """Explicit planning_offset_days is respected."""
         yaml_with_offset = VALID_YAML.replace(
-            '  end_date: "2026-03-06"',
-            '  end_date: "2026-03-06"\n  planning_offset_days: 5',
+            '  name: "Sprint 23.1"',
+            '  name: "Sprint 23.1"\n  planning_offset_days: 5',
         )
         cfg_file = tmp_path / "config.yaml"
         cfg_file.write_text(yaml_with_offset)

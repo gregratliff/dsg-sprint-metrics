@@ -14,6 +14,9 @@ The GitHub client fetches closed PRs sorted by `updated_at` descending and stops
 ### Team-scoped fetching
 The GitHub client accepts an optional `team_usernames` list to filter PRs at fetch time, reducing data transfer.
 
+### Iteration date fetching
+The ADO client provides `get_iteration_dates(iteration_path)` which calls `get_classification_node(structure_group='iterations', path=...)` to retrieve the start and finish dates configured on the iteration node. This means sprint dates are always authoritative from ADO — they are not stored in the config file. The path passed is `stem\name` (without the project prefix).
+
 ### ASOF queries for sprint scope tracking
 The ADO client supports `get_sprint_work_items_asof(iteration_path, asof_date)` which appends `ASOF '{date}'` to the WIQL query. This returns work items as they existed at a specific point in time. The pipeline uses two ASOF queries:
 - **Planning snapshot** (`start_date + planning_offset_days`): what was committed after planning settled

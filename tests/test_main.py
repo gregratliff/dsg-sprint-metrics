@@ -36,8 +36,6 @@ github:
 sprint:
   stem: "26\\\\Q1 2026"
   name: "Sprint 10"
-  start_date: "2026-03-01"
-  end_date: "2026-03-14"
 
 team_members:
   - name: "Jane Smith"
@@ -48,6 +46,19 @@ categories:
   - "strategic"
   - "defects"
 """
+
+
+_SPRINT_DATES = (
+    datetime(2026, 3, 1, tzinfo=UTC),
+    datetime(2026, 3, 14, tzinfo=UTC),
+)
+
+
+def _make_mock_ado() -> MagicMock:
+    """Create a mock ADO client with default iteration dates."""
+    mock = MagicMock()
+    mock.get_iteration_dates.return_value = _SPRINT_DATES
+    return mock
 
 
 def _sample_work_items():
@@ -296,7 +307,7 @@ class TestRun:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        mock_ado = MagicMock()
+        mock_ado = _make_mock_ado()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
         mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
         mock_gh = MagicMock()
@@ -346,7 +357,7 @@ class TestRun:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        mock_ado = MagicMock()
+        mock_ado = _make_mock_ado()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
         mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
         mock_gh = MagicMock()
@@ -366,7 +377,7 @@ class TestRun:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        mock_ado = MagicMock()
+        mock_ado = _make_mock_ado()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
         mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
         mock_gh = MagicMock()
@@ -409,7 +420,7 @@ class TestRun:
         )
         items = [*_sample_work_items(), other_team_item]
 
-        mock_ado = MagicMock()
+        mock_ado = _make_mock_ado()
         mock_ado.get_sprint_work_items.return_value = items
         mock_ado.get_sprint_work_items_asof.return_value = items
         mock_gh = MagicMock()
@@ -455,7 +466,7 @@ class TestRun:
         )
         prs_with_deploy = [*_sample_prs(), deploy_pr]
 
-        mock_ado = MagicMock()
+        mock_ado = _make_mock_ado()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
         mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
         mock_gh = MagicMock()
@@ -486,7 +497,7 @@ class TestRun:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        mock_ado = MagicMock()
+        mock_ado = _make_mock_ado()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
         mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
 
@@ -521,7 +532,7 @@ class TestRun:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        mock_ado = MagicMock()
+        mock_ado = _make_mock_ado()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
         mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
         # get_work_items_by_ids returns empty (all invalid IDs were skipped)
@@ -563,7 +574,7 @@ class TestRun:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        mock_ado = MagicMock()
+        mock_ado = _make_mock_ado()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
         mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
 
@@ -596,7 +607,7 @@ class TestRun:
         cfg_file = tmp_path / "config.yaml"
         cfg_file.write_text(VALID_YAML)
 
-        mock_ado = MagicMock()
+        mock_ado = _make_mock_ado()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
         mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
         mock_gh = MagicMock()
@@ -615,7 +626,7 @@ class TestRun:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        mock_ado = MagicMock()
+        mock_ado = _make_mock_ado()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
         mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
         mock_gh = MagicMock()
@@ -644,7 +655,7 @@ class TestRun:
         output_dir = tmp_path / "output"
         output_dir.mkdir()
 
-        mock_ado = MagicMock()
+        mock_ado = _make_mock_ado()
         mock_ado.get_sprint_work_items.return_value = _sample_work_items()
         mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
         mock_gh = MagicMock()

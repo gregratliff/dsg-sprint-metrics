@@ -53,6 +53,33 @@ class AzureDevOpsClient:
                         )
         return raw_items
 
+    def get_iteration_dates(self, iteration_path: str) -> tuple[datetime, datetime]:
+        """Fetch start and finish dates for an iteration from the classification node."""
+        try:
+            node = self._wit.get_classification_node(
+                project=self._project,
+                structure_group="iterations",
+                path=iteration_path,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to fetch iteration dates for '{iteration_path}': {exc}"
+            ) from exc
+
+        attrs: dict[str, str] | None = node.attributes
+        if not attrs or "startDate" not in attrs or "finishDate" not in attrs:
+            raise RuntimeError(
+                f"No date attributes found on iteration '{iteration_path}'"
+            )
+
+        start = _parse_date(attrs["startDate"])
+        end = _parse_date(attrs["finishDate"])
+        if start is None or end is None:
+            raise RuntimeError(
+                f"Could not parse dates for iteration '{iteration_path}'"
+            )
+        return start, end
+
     def get_sprint_work_items(self, iteration_path: str) -> list[WorkItem]:
         wiql = Wiql(
             query=(
