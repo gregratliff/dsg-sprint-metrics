@@ -27,7 +27,7 @@ Config dates may be naive; clients normalize them to UTC-aware datetimes before 
 
 ## Special Cases
 
-- **ADO iteration paths** contain backslashes (e.g., `Project\Sprint 10`). These are constructed in `main.py`, not the client.
+- **ADO iteration paths** are hierarchical and contain backslashes (e.g., `Project\26\Q1 2026\Sprint 26.3.1`). The full path is constructed in `main.py` from `project`, `sprint.stem`, and `sprint.name`. The sprint name can be overridden at the CLI via `--sprint-name`.
 - **GitHub 404 errors** (private repos, wrong org) are caught and re-raised as `RuntimeError` with a helpful message about repo access.
 - **PR filtering by title** (deployment PRs) happens in `main.py` after fetching, not in the client. The client stays a clean data fetcher. Revert chains (`Revert "Revert "..."..."`) are automatically unwrapped before matching, so patterns don't need to account for reverts.
 

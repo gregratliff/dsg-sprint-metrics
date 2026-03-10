@@ -34,6 +34,7 @@ github:
   pat_env_var: "GITHUB_PAT"
 
 sprint:
+  stem: "26\\\\Q1 2026"
   name: "Sprint 10"
   start_date: "2026-03-01"
   end_date: "2026-03-14"
@@ -54,14 +55,14 @@ def _sample_work_items():
         WorkItem(
             id=1, title="Feature A", assigned_to="jane.smith@company.com",
             story_points=5.0, state="Closed", category="strategic",
-            labels=[], iteration_path="myproject\\Sprint 10",
+            labels=[], iteration_path="myproject\\26\\Q1 2026\\Sprint 10",
             activated_date=datetime(2026, 3, 2, tzinfo=UTC),
             closed_date=datetime(2026, 3, 5, tzinfo=UTC),
         ),
         WorkItem(
             id=2, title="Bug B", assigned_to="jane.smith@company.com",
             story_points=3.0, state="Closed", category="defects",
-            labels=["rework"], iteration_path="myproject\\Sprint 10",
+            labels=["rework"], iteration_path="myproject\\26\\Q1 2026\\Sprint 10",
             activated_date=datetime(2026, 3, 3, tzinfo=UTC),
             closed_date=datetime(2026, 3, 6, tzinfo=UTC),
         ),
@@ -279,6 +280,14 @@ class TestParseArgs:
         args = parse_args(["--config", "config.yaml", "--dry-run"])
         assert args.dry_run is True
 
+    def test_sprint_name_option(self):
+        args = parse_args(["--config", "config.yaml", "--sprint-name", "Sprint 26.3.1"])
+        assert args.sprint_name == "Sprint 26.3.1"
+
+    def test_sprint_name_default_none(self):
+        args = parse_args(["--config", "config.yaml"])
+        assert args.sprint_name is None
+
 
 class TestRun:
     def test_full_pipeline(self, tmp_path):
@@ -327,7 +336,10 @@ class TestRun:
     def test_sprint_name_with_backslashes_produces_flat_filename(self, tmp_path):
         yaml_with_path = VALID_YAML.replace(
             'name: "Sprint 10"',
-            'name: "26\\\\Q1 2026\\\\Sprint 26.2.2"',
+            'name: "Sprint 26.2.2"',
+        ).replace(
+            'stem: "26\\\\Q1 2026"',
+            'stem: "26\\\\Q1 2026"',
         )
         cfg_file = tmp_path / "config.yaml"
         cfg_file.write_text(yaml_with_path)
@@ -345,7 +357,7 @@ class TestRun:
              patch.dict(os.environ, {"ADO_PAT": "fake", "GITHUB_PAT": "fake"}):
             run(config_path=str(cfg_file), output_dir=str(output_dir))
 
-        report_path = output_dir / "26_Q1_2026_Sprint_26.2.2_report.csv"
+        report_path = output_dir / "Sprint_26.2.2_report.csv"
         assert report_path.exists()
 
     def test_combined_identity_single_row_per_member(self, tmp_path):
@@ -391,7 +403,7 @@ class TestRun:
             id=99, title="Other Team Task",
             assigned_to="other.person@company.com",
             story_points=10.0, state="Closed", category="strategic",
-            labels=[], iteration_path="myproject\\Sprint 10",
+            labels=[], iteration_path="myproject\\26\\Q1 2026\\Sprint 10",
             activated_date=datetime(2026, 3, 2, tzinfo=UTC),
             closed_date=datetime(2026, 3, 5, tzinfo=UTC),
         )
@@ -596,6 +608,58 @@ class TestRun:
              pytest.raises(RuntimeError, match="Failed to write report"):
             run(config_path=str(cfg_file), output_dir="/nonexistent/path/does/not/exist")
 
+    def test_sprint_name_cli_overrides_config(self, tmp_path):
+        """--sprint-name CLI option overrides sprint.name from config."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(VALID_YAML)
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        mock_ado = MagicMock()
+        mock_ado.get_sprint_work_items.return_value = _sample_work_items()
+        mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
+        mock_gh = MagicMock()
+        mock_gh.get_pull_requests.return_value = _sample_prs()
+
+        with patch("sprint_metrics.main._create_ado_client", return_value=mock_ado), \
+             patch("sprint_metrics.main._create_github_client", return_value=mock_gh), \
+             patch.dict(os.environ, {"ADO_PAT": "fake", "GITHUB_PAT": "fake"}):
+            run(config_path=str(cfg_file), output_dir=str(output_dir),
+                sprint_name="Sprint 26.3.1")
+
+        # Report filename should use the overridden name
+        report_path = output_dir / "Sprint_26.3.1_report.csv"
+        assert report_path.exists()
+
+        with open(report_path) as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+        team_row = next(r for r in rows if r["member"] == "TEAM")
+        assert team_row["sprint"] == "Sprint 26.3.1"
+
+    def test_iteration_path_uses_stem_and_name(self, tmp_path):
+        """Iteration path should be project\\stem\\name."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(VALID_YAML)
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+
+        mock_ado = MagicMock()
+        mock_ado.get_sprint_work_items.return_value = _sample_work_items()
+        mock_ado.get_sprint_work_items_asof.return_value = _sample_work_items()
+        mock_gh = MagicMock()
+        mock_gh.get_pull_requests.return_value = _sample_prs()
+
+        with patch("sprint_metrics.main._create_ado_client", return_value=mock_ado), \
+             patch("sprint_metrics.main._create_github_client", return_value=mock_gh), \
+             patch.dict(os.environ, {"ADO_PAT": "fake", "GITHUB_PAT": "fake"}):
+            run(config_path=str(cfg_file), output_dir=str(output_dir))
+
+        # Verify iteration path passed to ADO client includes stem
+        call_args = mock_ado.get_sprint_work_items_asof.call_args_list[0]
+        iteration_path = call_args[0][0]
+        assert iteration_path == "myproject\\26\\Q1 2026\\Sprint 10"
+
     def test_missing_pat_env_var_raises(self, tmp_path):
         cfg_file = tmp_path / "config.yaml"
         cfg_file.write_text(VALID_YAML)
@@ -611,7 +675,7 @@ class TestClassifySprintScope:
             id=id_, title=f"Item {id_}", assigned_to=assigned_to,
             story_points=story_points, state=state, category="strategic",
             labels=[], activated_date=None, closed_date=None,
-            iteration_path="P\\Sprint 10",
+            iteration_path="P\\26\\Q1 2026\\Sprint 10",
         )
 
     def test_item_in_both_snapshots_is_committed(self):
@@ -666,7 +730,7 @@ class TestClassifySprintScope:
         result = classify_sprint_scope(
             planned, end,
             current_items_by_id=current_items_by_id,
-            sprint_iteration_path="P\\Sprint 10",
+            sprint_iteration_path="P\\26\\Q1 2026\\Sprint 10",
         )
         assert len(result) == 1
         assert result[0].scope_status == ScopeStatus.CARRIED_OVER
@@ -682,7 +746,7 @@ class TestClassifySprintScope:
         result = classify_sprint_scope(
             planned, end,
             current_items_by_id=current_items_by_id,
-            sprint_iteration_path="P\\Sprint 10",
+            sprint_iteration_path="P\\26\\Q1 2026\\Sprint 10",
         )
         assert len(result) == 1
         assert result[0].scope_status == ScopeStatus.REMOVED
@@ -695,7 +759,7 @@ class TestClassifySprintScope:
         result = classify_sprint_scope(
             planned, end,
             current_items_by_id=current_items_by_id,
-            sprint_iteration_path="P\\Sprint 10",
+            sprint_iteration_path="P\\26\\Q1 2026\\Sprint 10",
         )
         assert len(result) == 1
         assert result[0].scope_status == ScopeStatus.REMOVED
@@ -710,7 +774,7 @@ class TestClassifySprintScope:
         result = classify_sprint_scope(
             planned, end,
             current_items_by_id=current_items_by_id,
-            sprint_iteration_path="P\\Sprint 10",
+            sprint_iteration_path="P\\26\\Q1 2026\\Sprint 10",
         )
         assert result[0].state == "Closed"
         assert result[0].scope_status == ScopeStatus.CARRIED_OVER
@@ -735,7 +799,7 @@ class TestClassifySprintScope:
         result = classify_sprint_scope(
             planned, end,
             current_items_by_id=current_items_by_id,
-            sprint_iteration_path="P\\Sprint 10",
+            sprint_iteration_path="P\\26\\Q1 2026\\Sprint 10",
         )
         by_id = {wi.id: wi for wi in result}
         assert by_id[1].scope_status == ScopeStatus.COMMITTED

@@ -173,6 +173,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--config", required=True, help="Path to config YAML file")
     parser.add_argument("--output-dir", default=".", help="Directory for CSV output")
     parser.add_argument("--dry-run", action="store_true", help="Validate config without calling APIs")
+    parser.add_argument("--sprint-name", default=None, help="Override sprint name from config")
     return parser.parse_args(argv)
 
 
@@ -204,8 +205,13 @@ def run(
     config_path: str,
     output_dir: str = ".",
     dry_run: bool = False,
+    sprint_name: str | None = None,
 ) -> None:
     cfg = load_config(config_path)
+
+    # CLI --sprint-name overrides config sprint.name
+    if sprint_name is not None:
+        cfg.sprint.name = sprint_name
 
     # Validate PATs exist
     for env_var in [cfg.azure_devops.pat_env_var, cfg.github.pat_env_var]:
@@ -223,8 +229,8 @@ def run(
     ado_client = _create_ado_client(cfg)
     gh_client = _create_github_client(cfg)
 
-    # Build iteration path from project + sprint name
-    iteration_path = f"{cfg.azure_devops.project}\\{cfg.sprint.name}"
+    # Build iteration path from project + stem + sprint name
+    iteration_path = f"{cfg.azure_devops.project}\\{cfg.sprint.stem}\\{cfg.sprint.name}"
     team_identities = {m.ado_identity for m in cfg.team_members}
 
     # Calculate planning snapshot date
@@ -395,7 +401,8 @@ def main() -> None:
         format="%(levelname)s: %(message)s",
     )
     args = parse_args()
-    run(config_path=args.config, output_dir=args.output_dir, dry_run=args.dry_run)
+    run(config_path=args.config, output_dir=args.output_dir, dry_run=args.dry_run,
+        sprint_name=args.sprint_name)
 
 
 if __name__ == "__main__":

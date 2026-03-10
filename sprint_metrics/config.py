@@ -31,6 +31,7 @@ class GitHubConfig:
 
 @dataclass
 class SprintConfig:
+    stem: str
     name: str
     start_date: datetime
     end_date: datetime
@@ -101,6 +102,7 @@ def load_config(path: str) -> Config:
     # Sprint
     sprint_raw: dict[str, Any] = _require(raw, "sprint")
     sprint = SprintConfig(
+        stem=_require(sprint_raw, "stem", "sprint"),
         name=_require(sprint_raw, "name", "sprint"),
         start_date=datetime.fromisoformat(
             str(_require(sprint_raw, "start_date", "sprint"))

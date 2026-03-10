@@ -22,6 +22,7 @@ github:
   pat_env_var: "GITHUB_PAT"
 
 sprint:
+  stem: "26\\\\Q1 2026"
   name: "Sprint 23.1"
   start_date: "2026-02-23"
   end_date: "2026-03-06"
@@ -67,11 +68,20 @@ class TestLoadConfig:
         cfg_file.write_text(VALID_YAML)
         cfg = load_config(str(cfg_file))
 
+        assert cfg.sprint.stem == "26\\Q1 2026"
         assert cfg.sprint.name == "Sprint 23.1"
         assert cfg.sprint.start_date.year == 2026
         assert cfg.sprint.start_date.month == 2
         assert cfg.sprint.start_date.day == 23
         assert cfg.sprint.end_date.year == 2026
+
+    def test_sprint_stem_required(self, tmp_path):
+        yaml_no_stem = VALID_YAML.replace('  stem: "26\\\\Q1 2026"\n', "")
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(yaml_no_stem)
+
+        with pytest.raises(ConfigError):
+            load_config(str(cfg_file))
 
     def test_team_members(self, tmp_path):
         cfg_file = tmp_path / "config.yaml"
